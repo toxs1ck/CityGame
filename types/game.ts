@@ -147,6 +147,7 @@ export interface Group {
   color: string;
   device_id: string;
   joined_at: string;
+  starting_point_id: string | null;
 }
 
 export interface GroupLocation {

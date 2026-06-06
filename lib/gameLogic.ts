@@ -6,6 +6,7 @@ import type {
   GroupAbility,
   ScenarioSettings,
   SessionSettings,
+  StartingPoint,
   Task,
 } from "../types/game";
 import {
@@ -160,6 +161,24 @@ export function formatDuration(seconds: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s > 0 ? `${s}s` : ""}`.trim();
   return `${s}s`;
+}
+
+/**
+ * Randomly distribute starting points across groups.
+ * Returns a map of group_id → starting_point_id.
+ * If there are fewer starting points than groups, points are reused round-robin.
+ */
+export function assignStartingPoints(
+  groups: Group[],
+  startingPoints: StartingPoint[]
+): Map<string, string> {
+  const result = new Map<string, string>();
+  if (startingPoints.length === 0) return result;
+  const shuffled = [...startingPoints].sort(() => Math.random() - 0.5);
+  groups.forEach((g, i) => {
+    result.set(g.id, shuffled[i % shuffled.length].id);
+  });
+  return result;
 }
 
 export function generateJoinCode(length = 6): string {
