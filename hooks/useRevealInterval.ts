@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useGameStore } from "../store/gameStore";
-import { usePlayerStore } from "../store/playerStore";
-import { DEFAULT_REVEAL_INTERVAL_S } from "../constants/game";
+import { DEFAULT_REVEAL_INTERVAL_S, DEFAULT_HEADSTART_S } from "../constants/game";
 
 /**
  * For the GM/host device only: broadcasts the fugitive's current location
- * to all seeker devices at the configured interval.
+ * to all seeker devices at the configured interval, after the headstart has elapsed.
  */
 export function useFugitiveRevealBroadcast(active: boolean) {
   const { session, groups, latestLocations } = useGameStore();
@@ -17,15 +16,25 @@ export function useFugitiveRevealBroadcast(active: boolean) {
 
     const intervalMs =
       (session.settings.reveal_interval_s ?? DEFAULT_REVEAL_INTERVAL_S) * 1000;
+    const headstartS = session.settings.headstart_s ?? DEFAULT_HEADSTART_S;
+    const startedAt = session.started_at
+      ? new Date(session.started_at).getTime()
+      : Date.now();
 
     const broadcast = async () => {
+      // Suppress reveals during fugitive head-start window
+      const elapsedS = (Date.now() - startedAt) / 1000;
+      if (elapsedS < headstartS) return;
+
       const fugitiveGroup = groups.find((g) => g.role === "fugitive");
       if (!fugitiveGroup) return;
 
       const hasSkipPing = useGameStore
         .getState()
         .abilityObjects.some(
-          (o) => o.type === "skip_ping" && o.placed_by_group_id === fugitiveGroup.id
+          (o) =>
+            o.type === "skip_ping" &&
+            o.placed_by_group_id === fugitiveGroup.id
         );
       if (hasSkipPing) return;
 
@@ -45,21 +54,11 @@ export function useFugitiveRevealBroadcast(active: boolean) {
       });
     };
 
-    broadcast(); // send immediately on start
+    broadcast();
     timerRef.current = setInterval(broadcast, intervalMs);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [active, session?.id, session?.settings.reveal_interval_s]);
-}
-
-/** Returns seconds until next fugitive reveal (for seeker HUD). */
-export function useRevealCountdown(sessionId: string | null): number {
-  const { session } = useGameStore();
-  const intervalS = session?.settings.reveal_interval_s ?? DEFAULT_REVEAL_INTERVAL_S;
-
-  // This is managed purely client-side based on the last reveal timestamp.
-  // Components can use the lastFugitiveReveal from the store to compute elapsed time.
-  return intervalS;
+  }, [active, session?.id, session?.settings.reveal_interval_s, session?.settings.headstart_s]);
 }

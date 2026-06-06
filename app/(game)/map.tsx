@@ -17,31 +17,43 @@ import { useGroupLocations } from "../../hooks/useGroupLocations";
 import { useGameSessionSubscription } from "../../hooks/useGameSession";
 import { useFugitiveRevealBroadcast } from "../../hooks/useRevealInterval";
 import { useNearbyTasks } from "../../hooks/useNearbyTasks";
+import { useTaskSubscription } from "../../hooks/useTaskSubscription";
+import { useActiveAbilitiesSubscription } from "../../hooks/useActiveAbilitiesSubscription";
+import { useAbilityObjectsSubscription } from "../../hooks/useAbilityObjectsSubscription";
 import { supabase } from "../../lib/supabase";
 import { canControl, formatDuration } from "../../lib/gameLogic";
-import { DEFAULT_REVEAL_INTERVAL_S } from "../../constants/game";
-import type { GeoPolygon } from "../../types/game";
+import { DEFAULT_REVEAL_INTERVAL_S, DEFAULT_HEADSTART_S } from "../../constants/game";
+import type { AbilityObject, GeoPoint, GeoPolygon } from "../../types/game";
 
 export default function GameMapScreen() {
-  const { session, groups, latestLocations, lastFugitiveReveal, pois, setSession } = useGameStore();
+  const {
+    session,
+    groups,
+    latestLocations,
+    lastFugitiveReveal,
+    pois,
+    abilityObjects,
+  } = useGameStore();
   const { myGroup, deviceId, myTasks } = usePlayerStore();
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [revealCountdown, setRevealCountdown] = useState(0);
+  const [headstartLeft, setHeadstartLeft] = useState(0);
   const mapRef = useRef<MapView>(null);
 
   const isFugitive = myGroup?.role === "fugitive";
   const isGMOrHost = session ? canControl(session, deviceId!, null) : false;
 
-  // Location tracking
+  // Core subscriptions
   useLocationTracking(!!session && session.status === "active");
-
-  // Real-time subscriptions
   useGroupLocations(session?.id ?? null);
   useGameSessionSubscription(session?.id ?? null);
-
-  // GM/host broadcasts fugitive location on interval
   useFugitiveRevealBroadcast(isGMOrHost && session?.status === "active");
+
+  // Phase 2 subscriptions
+  useTaskSubscription();
+  useActiveAbilitiesSubscription();
+  useAbilityObjectsSubscription();
 
   // Watch own position for map centering and nearby tasks
   useEffect(() => {
@@ -50,26 +62,51 @@ export default function GameMapScreen() {
       if (status !== "granted") return;
       Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 3000 },
-        (loc) => setMyPos({ lat: loc.coords.latitude, lng: loc.coords.longitude })
-      ).then((s) => { sub = s; });
+        (loc) =>
+          setMyPos({ lat: loc.coords.latitude, lng: loc.coords.longitude })
+      ).then((s) => {
+        sub = s;
+      });
     });
-    return () => { sub?.remove(); };
+    return () => {
+      sub?.remove();
+    };
   }, []);
 
   // Game timer
   useEffect(() => {
     if (!session?.started_at || !session.settings.duration_s) return;
-    const end = new Date(session.started_at).getTime() + (session.settings.duration_s ?? 5400) * 1000;
-    const update = () => setTimeLeft(Math.max(0, Math.round((end - Date.now()) / 1000)));
+    const end =
+      new Date(session.started_at).getTime() +
+      (session.settings.duration_s ?? 5400) * 1000;
+    const update = () =>
+      setTimeLeft(Math.max(0, Math.round((end - Date.now()) / 1000)));
     update();
     const t = setInterval(update, 1000);
     return () => clearInterval(t);
   }, [session?.started_at]);
 
+  // Headstart countdown for seekers
+  useEffect(() => {
+    if (isFugitive || !session?.started_at) return;
+    const headstartS =
+      session.settings.headstart_s ?? DEFAULT_HEADSTART_S;
+    const startedAt = new Date(session.started_at).getTime();
+
+    const update = () => {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      setHeadstartLeft(Math.max(0, Math.ceil(headstartS - elapsed)));
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [session?.started_at, isFugitive]);
+
   // Reveal countdown for seekers
   useEffect(() => {
     if (isFugitive) return;
-    const interval = session?.settings.reveal_interval_s ?? DEFAULT_REVEAL_INTERVAL_S;
+    const interval =
+      session?.settings.reveal_interval_s ?? DEFAULT_REVEAL_INTERVAL_S;
     const lastReveal = lastFugitiveReveal
       ? new Date(lastFugitiveReveal.recorded_at).getTime()
       : Date.now();
@@ -86,13 +123,66 @@ export default function GameMapScreen() {
 
   const visibleGroups = groups.filter((g) => {
     if (g.id === myGroup?.id) return false;
-    if (isFugitive) return g.role === "seeker"; // fugitive always sees seekers
-    return g.role === "fugitive"; // seekers see fugitive on reveal
+    if (isFugitive) return g.role === "seeker";
+    return g.role === "fugitive";
   });
 
   const gameArea = session
-    ? (session as any).scenario?.game_area as GeoPolygon | null
+    ? ((session as any).scenario?.game_area as GeoPolygon | null)
     : null;
+
+  function renderAbilityObjects() {
+    return abilityObjects.map((obj: AbilityObject) => {
+      if (!obj.expires_at || new Date(obj.expires_at) > new Date()) {
+        if ("lat" in obj.geometry) {
+          const center = obj.geometry as GeoPoint;
+          const radius =
+            (obj.metadata?.radius_m as number) ?? 100;
+
+          if (
+            obj.type === "exclusion_zone" ||
+            obj.type === "roadblock" ||
+            obj.type === "drone_view"
+          ) {
+            return (
+              <Circle
+                key={obj.id}
+                center={{ latitude: center.lat, longitude: center.lng }}
+                radius={radius}
+                strokeColor={
+                  obj.type === "exclusion_zone"
+                    ? "rgba(231,76,60,0.8)"
+                    : obj.type === "drone_view"
+                    ? "rgba(52,152,219,0.8)"
+                    : "rgba(155,89,182,0.8)"
+                }
+                fillColor={
+                  obj.type === "exclusion_zone"
+                    ? "rgba(231,76,60,0.15)"
+                    : obj.type === "drone_view"
+                    ? "rgba(52,152,219,0.1)"
+                    : "rgba(155,89,182,0.1)"
+                }
+                strokeWidth={2}
+              />
+            );
+          }
+
+          if (obj.type === "trap" || obj.type === "tripwire") {
+            return (
+              <Marker
+                key={obj.id}
+                coordinate={{ latitude: center.lat, longitude: center.lng }}
+                title={obj.type === "trap" ? "Falle" : "Stolperdraht"}
+                pinColor="#E74C3C"
+              />
+            );
+          }
+        }
+      }
+      return null;
+    });
+  }
 
   return (
     <View style={styles.container}>
@@ -115,7 +205,10 @@ export default function GameMapScreen() {
         {/* Game area boundary */}
         {gameArea && (
           <Polygon
-            coordinates={gameArea.coordinates[0].map(([lng, lat]) => ({ latitude: lat, longitude: lng }))}
+            coordinates={gameArea.coordinates[0].map(([lng, lat]) => ({
+              latitude: lat,
+              longitude: lng,
+            }))}
             strokeColor="rgba(52, 152, 219, 0.8)"
             fillColor="rgba(52, 152, 219, 0.05)"
             strokeWidth={2}
@@ -124,7 +217,9 @@ export default function GameMapScreen() {
 
         {/* POI markers */}
         {pois.map((poi) => {
-          const hasActiveTask = myTasks.some((t) => t.task?.poi_id === poi.id && t.status === "active");
+          const hasActiveTask = myTasks.some(
+            (t) => t.task?.poi_id === poi.id && t.status === "active"
+          );
           return (
             <Marker
               key={poi.id}
@@ -137,12 +232,12 @@ export default function GameMapScreen() {
 
         {/* Other group markers */}
         {visibleGroups.map((g) => {
-          const loc = isFugitive
-            ? latestLocations.get(g.id)
-            : g.role === "fugitive"
-            ? lastFugitiveReveal
-            : latestLocations.get(g.id);
-
+          const loc =
+            isFugitive
+              ? latestLocations.get(g.id)
+              : g.role === "fugitive"
+              ? lastFugitiveReveal
+              : latestLocations.get(g.id);
           if (!loc) return null;
           return (
             <Marker
@@ -153,6 +248,9 @@ export default function GameMapScreen() {
             />
           );
         })}
+
+        {/* Ability objects (exclusion zones, traps, etc.) */}
+        {renderAbilityObjects()}
       </MapView>
 
       {/* Top HUD */}
@@ -175,7 +273,17 @@ export default function GameMapScreen() {
           </View>
         </View>
 
-        {!isFugitive && (
+        {/* Headstart banner for seekers */}
+        {!isFugitive && headstartLeft > 0 && (
+          <View style={styles.headstartBanner}>
+            <Text style={styles.headstartText}>
+              🏃 Vorsprung läuft: {formatDuration(headstartLeft)}
+            </Text>
+          </View>
+        )}
+
+        {/* Reveal countdown for seekers (after headstart) */}
+        {!isFugitive && headstartLeft === 0 && (
           <View style={styles.revealRow}>
             <Text style={styles.revealText}>
               Nächster Ping in {revealCountdown}s
@@ -190,12 +298,16 @@ export default function GameMapScreen() {
         {nearbyTasks.length > 0 && (
           <TouchableOpacity
             style={styles.taskAlert}
-            onPress={() => router.push(`/(game)/task/${nearbyTasks[0].id}`)}
+            onPress={() =>
+              router.push(`/(game)/task/${nearbyTasks[0].id}`)
+            }
           >
             <Text style={styles.taskAlertIcon}>📍</Text>
             <View style={styles.taskAlertText}>
               <Text style={styles.taskAlertTitle}>Aufgabe in der Nähe!</Text>
-              <Text style={styles.taskAlertSub}>{nearbyTasks[0].task?.title}</Text>
+              <Text style={styles.taskAlertSub}>
+                {nearbyTasks[0].task?.title}
+              </Text>
             </View>
             <Text style={styles.taskAlertArrow}>→</Text>
           </TouchableOpacity>
@@ -230,7 +342,6 @@ export default function GameMapScreen() {
           <TouchableOpacity
             style={styles.bottomBtn}
             onPress={() => {
-              // Show task list
               Alert.alert(
                 "Aufgaben",
                 myTasks
@@ -287,6 +398,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   apText: { color: "#F39C12", fontWeight: "700", fontSize: 14 },
+  headstartBanner: {
+    marginTop: 8,
+    backgroundColor: "rgba(155,89,182,0.9)",
+    borderRadius: 10,
+    padding: 8,
+    alignItems: "center",
+  },
+  headstartText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   revealRow: {
     marginTop: 8,
     backgroundColor: "rgba(155,89,182,0.8)",
@@ -332,5 +451,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(52,152,219,0.9)",
   },
   bottomBtnIcon: { fontSize: 22 },
-  bottomBtnLabel: { color: "#fff", fontSize: 11, marginTop: 4, fontWeight: "600" },
+  bottomBtnLabel: {
+    color: "#fff",
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: "600",
+  },
 });

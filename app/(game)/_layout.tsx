@@ -16,6 +16,7 @@ export default function GameLayout() {
       <Stack.Screen name="map" options={{ headerShown: false }} />
       <Stack.Screen name="task/[id]" options={{ title: "Aufgabe" }} />
       <Stack.Screen name="abilities-active" options={{ title: "Meine Fähigkeiten" }} />
+      <Stack.Screen name="game-over" options={{ title: "Spiel beendet", headerBackVisible: false }} />
     </Stack>
   );
 }

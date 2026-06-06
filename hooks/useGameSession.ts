@@ -1,9 +1,9 @@
 import { useEffect } from "react";
+import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { useGameStore } from "../store/gameStore";
 import type { GameSession } from "../types/game";
 
-/** Subscribes to session status changes in real-time. */
 export function useGameSessionSubscription(sessionId: string | null) {
   const { setSession } = useGameStore();
 
@@ -21,7 +21,11 @@ export function useGameSessionSubscription(sessionId: string | null) {
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
-          setSession(payload.new as GameSession);
+          const s = payload.new as GameSession;
+          setSession(s);
+          if (s.status === "finished") {
+            router.replace("/(game)/game-over");
+          }
         }
       )
       .subscribe();
