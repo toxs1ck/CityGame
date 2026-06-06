@@ -22,7 +22,8 @@ import { useActiveAbilitiesSubscription } from "../../hooks/useActiveAbilitiesSu
 import { useAbilityObjectsSubscription } from "../../hooks/useAbilityObjectsSubscription";
 import { supabase } from "../../lib/supabase";
 import { canControl, formatDuration } from "../../lib/gameLogic";
-import { DEFAULT_REVEAL_INTERVAL_S, DEFAULT_HEADSTART_S } from "../../constants/game";
+import { haversineDistance } from "../../lib/geo";
+import { DEFAULT_REVEAL_INTERVAL_S, DEFAULT_HEADSTART_S, CATCH_RADIUS_M } from "../../constants/game";
 import type { AbilityObject, GeoPoint, GeoPolygon } from "../../types/game";
 
 export default function GameMapScreen() {
@@ -120,6 +121,15 @@ export default function GameMapScreen() {
   }, [lastFugitiveReveal?.recorded_at, isFugitive]);
 
   const nearbyTasks = useNearbyTasks(myPos?.lat ?? null, myPos?.lng ?? null);
+
+  // Show catch button when seeker is within 3× radius of last fugitive reveal
+  const canAttemptCatch =
+    !isFugitive &&
+    headstartLeft === 0 &&
+    myPos !== null &&
+    lastFugitiveReveal !== null &&
+    haversineDistance(myPos, { lat: lastFugitiveReveal.lat, lng: lastFugitiveReveal.lng }) <=
+      CATCH_RADIUS_M * 3;
 
   const visibleGroups = groups.filter((g) => {
     if (g.id === myGroup?.id) return false;
@@ -294,6 +304,16 @@ export default function GameMapScreen() {
 
       {/* Bottom panel */}
       <SafeAreaView style={styles.bottomPanel} pointerEvents="box-none">
+        {/* Catch button — only visible for seekers near the last reveal */}
+        {canAttemptCatch && (
+          <View style={styles.catchBanner}>
+            <Text style={styles.catchText}>🎯 Du bist nah dran!</Text>
+            <Text style={styles.catchSub}>
+              Der Game Master wird benachrichtigt.
+            </Text>
+          </View>
+        )}
+
         {/* Nearby task alert */}
         {nearbyTasks.length > 0 && (
           <TouchableOpacity
@@ -420,6 +440,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
+  catchBanner: {
+    margin: 12,
+    marginBottom: 0,
+    backgroundColor: "#E74C3C",
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
+  },
+  catchText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+  catchSub: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 },
   taskAlert: {
     margin: 12,
     backgroundColor: "#F39C12",

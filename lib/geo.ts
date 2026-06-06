@@ -58,6 +58,11 @@ export function randomOffset(point: GeoPoint, radiusM: number): GeoPoint {
   };
 }
 
+export function compassDirection(bearing: number): string {
+  const dirs = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"];
+  return dirs[Math.round(bearing / 45) % 8];
+}
+
 export function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;

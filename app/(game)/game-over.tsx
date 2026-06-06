@@ -73,11 +73,27 @@ export default function GameOverScreen() {
   }
 
   const winner = results[0];
+  const catchInfo = (session?.settings as any)?.catch_info as
+    | { caught_by_name: string; fugitive_name: string; distance_m: number }
+    | undefined;
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.trophy}>🏆</Text>
-      <Text style={styles.title}>Spiel beendet!</Text>
+      <Text style={styles.trophy}>{catchInfo ? "🎯" : "🏆"}</Text>
+      <Text style={styles.title}>
+        {catchInfo ? "Flüchtig gefangen!" : "Spiel beendet!"}
+      </Text>
+
+      {catchInfo && (
+        <View style={styles.catchCard}>
+          <Text style={styles.catchText}>
+            {catchInfo.caught_by_name} hat {catchInfo.fugitive_name} gefangen
+          </Text>
+          <Text style={styles.catchDist}>
+            auf {catchInfo.distance_m} m Entfernung
+          </Text>
+        </View>
+      )}
 
       {winner && (
         <View style={[styles.winnerCard, { borderColor: winner.group.color }]}>
@@ -151,6 +167,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 20,
   },
+  catchCard: {
+    backgroundColor: "#2a0a0a",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#E74C3C",
+    marginBottom: 20,
+  },
+  catchText: { color: "#fff", fontSize: 16, fontWeight: "700", textAlign: "center" },
+  catchDist: { color: "#E74C3C", fontSize: 13, marginTop: 4 },
   winnerCard: {
     backgroundColor: "#1a1a3e",
     borderRadius: 20,

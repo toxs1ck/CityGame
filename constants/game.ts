@@ -21,3 +21,4 @@ export const MAX_NORMAL_ABILITIES = 2;
 export const MAX_ULTIMATE_ABILITIES = 1;
 
 export const STARTING_POINT_RADIUS_M = 30;
+export const CATCH_RADIUS_M = 20;

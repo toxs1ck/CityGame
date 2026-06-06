@@ -17,6 +17,7 @@ import { useGameStore } from "../../../../store/gameStore";
 import { useAllGroupLocations } from "../../../../hooks/useGroupLocations";
 import { useFugitiveRevealBroadcast } from "../../../../hooks/useRevealInterval";
 import { assignTasksToGroups, assignStartingPoints } from "../../../../lib/gameLogic";
+import { useCatchDetection } from "../../../../hooks/useCatchDetection";
 import type { GameSession, Group, POI, Task, StartingPoint, GeoPolygon } from "../../../../types/game";
 
 export default function MonitorScreen() {
@@ -29,6 +30,7 @@ export default function MonitorScreen() {
 
   useAllGroupLocations(sessionId);
   useFugitiveRevealBroadcast(localSession?.status === "active");
+  useCatchDetection(localSession?.status === "active");
 
   useEffect(() => {
     loadSession();

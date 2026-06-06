@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import * as Crypto from "expo-crypto";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePlayerStore } from "../store/playerStore";
 
 const queryClient = new QueryClient({
@@ -12,14 +13,22 @@ const queryClient = new QueryClient({
   },
 });
 
+const DEVICE_ID_KEY = "citygame_device_id";
+
 export default function RootLayout() {
   const { deviceId, setDeviceId } = usePlayerStore();
 
   useEffect(() => {
-    if (!deviceId) {
-      const id = Crypto.randomUUID();
-      setDeviceId(id);
-    }
+    (async () => {
+      const stored = await AsyncStorage.getItem(DEVICE_ID_KEY);
+      if (stored) {
+        setDeviceId(stored);
+      } else {
+        const id = Crypto.randomUUID();
+        await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+        setDeviceId(id);
+      }
+    })();
   }, []);
 
   return (
