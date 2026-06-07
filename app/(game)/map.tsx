@@ -65,14 +65,12 @@ export default function GameMapScreen() {
   const [catchSecondsLeft, setCatchSecondsLeft] = useState(DEFAULT_CATCH_WINDOW_S);
   const [frozenSecondsLeft, setFrozenSecondsLeft] = useState(0);
   const [freezeLocation, setFreezeLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [freezeTriedToEscape, setFreezeTriedToEscape] = useState(false);
-  const [returnHoldStart, setReturnHoldStart] = useState<number | null>(null);
-  const [returnSecondsLeft, setReturnSecondsLeft] = useState(30);
   const [fugitiveTrail, setFugitiveTrail] = useState<{ lat: number; lng: number }[]>([]);
 
   const oobStartTime = useRef<number | null>(null);
   const fugitiveBroadcastEnd = useRef<number | null>(null);
   const frozenEndRef = useRef<number | null>(null);
+  const wasInFreezeZoneRef = useRef(true);
   const myPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<MapView>(null);
 
@@ -250,9 +248,7 @@ export default function GameMapScreen() {
           setFrozen(true);
           setFrozenSecondsLeft(durationS);
           setFreezeLocation(myPosRef.current); // lock-in current position
-          setFreezeTriedToEscape(false);
-          setReturnHoldStart(null);
-          setReturnSecondsLeft(30);
+          wasInFreezeZoneRef.current = true;
         }
       })
       .subscribe();
@@ -260,9 +256,9 @@ export default function GameMapScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [isFugitive, session?.id, myGroup?.id, setFrozen]);
 
-  // Freeze: normal countdown (only while seeker hasn't tried to escape)
+  // Freeze countdown — runs continuously; time is extended by +30 s each time the seeker leaves the zone
   useEffect(() => {
-    if (!isFrozen || freezeTriedToEscape) return;
+    if (!isFrozen) return;
     const t = setInterval(() => {
       const left = Math.max(
         0,
@@ -272,57 +268,24 @@ export default function GameMapScreen() {
       if (left === 0) {
         setFrozen(false);
         setFreezeLocation(null);
-        setFreezeTriedToEscape(false);
+        wasInFreezeZoneRef.current = true;
       }
     }, 1000);
     return () => clearInterval(t);
-  }, [isFrozen, freezeTriedToEscape, setFrozen]);
+  }, [isFrozen, setFrozen]);
 
-  // Freeze: proximity check — detect escape attempts and track return
+  // Freeze proximity check — adds 30 s penalty each time seeker exits the zone
   useEffect(() => {
     if (!isFrozen || !freezeLocation || !myPos) return;
 
-    const dist = haversineDistance(myPos, freezeLocation);
-    const inRadius = dist <= FREEZE_HOLD_RADIUS_M;
+    const inRadius = haversineDistance(myPos, freezeLocation) <= FREEZE_HOLD_RADIUS_M;
 
-    if (!freezeTriedToEscape) {
-      if (!inRadius) {
-        setFreezeTriedToEscape(true);
-        setReturnHoldStart(null);
-      }
-    } else {
-      if (inRadius) {
-        if (returnHoldStart === null) {
-          setReturnHoldStart(Date.now());
-        }
-      } else {
-        // Left the area again — reset the return hold timer
-        if (returnHoldStart !== null) setReturnHoldStart(null);
-      }
+    if (wasInFreezeZoneRef.current && !inRadius) {
+      // Exited: add 30 s penalty
+      frozenEndRef.current = (frozenEndRef.current ?? Date.now()) + 30_000;
     }
-  }, [myPos, isFrozen, freezeLocation, freezeTriedToEscape, returnHoldStart]);
-
-  // Freeze: return-hold countdown (30 s at freeze spot after escape attempt)
-  useEffect(() => {
-    if (!freezeTriedToEscape || returnHoldStart === null) {
-      setReturnSecondsLeft(30);
-      return;
-    }
-    const t = setInterval(() => {
-      const left = Math.max(
-        0,
-        Math.ceil((returnHoldStart + 30_000 - Date.now()) / 1000)
-      );
-      setReturnSecondsLeft(left);
-      if (left === 0) {
-        setFrozen(false);
-        setFreezeLocation(null);
-        setFreezeTriedToEscape(false);
-        setReturnHoldStart(null);
-      }
-    }, 500);
-    return () => clearInterval(t);
-  }, [freezeTriedToEscape, returnHoldStart, setFrozen]);
+    wasInFreezeZoneRef.current = inRadius;
+  }, [myPos, isFrozen, freezeLocation]);
 
   // Drone view: seeker receives real-time fugitive reveals when fugitive enters a drone circle
   useEffect(() => {
@@ -585,17 +548,15 @@ export default function GameMapScreen() {
           />
         )}
 
-        {/* Freeze hold zone — shows where the frozen seeker must return to */}
+        {/* Freeze hold zone — blue when inside, red when outside */}
         {isFrozen && freezeLocation && (
           <Circle
             center={{ latitude: freezeLocation.lat, longitude: freezeLocation.lng }}
             radius={FREEZE_HOLD_RADIUS_M}
             strokeColor={
-              returnHoldStart !== null
-                ? "rgba(52,152,219,0.9)"
-                : freezeTriedToEscape
-                ? "rgba(231,76,60,0.9)"
-                : "rgba(0,85,170,0.7)"
+              myPos && haversineDistance(myPos, freezeLocation) <= FREEZE_HOLD_RADIUS_M
+                ? "rgba(0,85,170,0.8)"
+                : "rgba(231,76,60,0.9)"
             }
             fillColor="rgba(0,85,170,0.1)"
             strokeWidth={2}
@@ -723,17 +684,14 @@ export default function GameMapScreen() {
         {isFrozen && (
           <View style={styles.frozenOverlay}>
             <Text style={styles.frozenOverlayTitle}>❄️ EINGEFROREN!</Text>
-            {!freezeTriedToEscape ? (
+            {myPos && freezeLocation &&
+            haversineDistance(myPos, freezeLocation) > FREEZE_HOLD_RADIUS_M ? (
               <Text style={styles.frozenOverlaySub}>
-                Bleib stehen — noch {frozenSecondsLeft}s
-              </Text>
-            ) : returnHoldStart !== null ? (
-              <Text style={styles.frozenOverlaySub}>
-                ⏱ Am Marker halten — noch {returnSecondsLeft}s
+                ⚠️ Zone verlassen! +30s Strafe — noch {frozenSecondsLeft}s
               </Text>
             ) : (
               <Text style={styles.frozenOverlaySub}>
-                Kehre zu deiner Ausgangsposition zurück!
+                Bleib im Kreis — noch {frozenSecondsLeft}s
               </Text>
             )}
           </View>
