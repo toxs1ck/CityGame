@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from "react-native";
 import * as Location from "expo-location";
+import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { usePlayerStore } from "../../store/playerStore";
 import { useGameStore } from "../../store/gameStore";
@@ -33,14 +34,16 @@ const INSTANT_ABILITIES = new Set([
   "exact_location",
 ]);
 
-/** Abilities that place a persistent object on the map. */
+/** Abilities that place a persistent object at current position. */
 const PLACEMENT_ABILITIES = new Set([
   "exclusion_zone",
   "motion_detector",
   "trap",
   "roadblock",
-  "drone_view",
 ]);
+
+/** Abilities that open a dedicated placement screen (map tap). */
+const MAP_PLACEMENT_ABILITIES = new Set(["drone_view"]);
 
 async function getCurrentPos(): Promise<{ lat: number; lng: number } | null> {
   const { status } = await Location.requestForegroundPermissionsAsync();
@@ -134,6 +137,8 @@ export default function AbilitiesActiveScreen() {
   async function runAbility(def: AbilityDefinition, ga: GroupAbility) {
     if (INSTANT_ABILITIES.has(def.type)) {
       await activateInstant(def, ga);
+    } else if (MAP_PLACEMENT_ABILITIES.has(def.type)) {
+      router.push(`/(game)/drone-placement?ga_id=${ga.id}`);
     } else if (PLACEMENT_ABILITIES.has(def.type)) {
       await activatePlacement(def, ga);
     } else if (def.type === "freeze") {
@@ -344,7 +349,7 @@ export default function AbilitiesActiveScreen() {
     const canAfford =
       def.tier !== "ultimate" ||
       (myGroup?.action_points ?? 0) >= (def.ap_cost ?? 0);
-    const isPlacement = PLACEMENT_ABILITIES.has(def.type);
+    const isPlacement = PLACEMENT_ABILITIES.has(def.type) || MAP_PLACEMENT_ABILITIES.has(def.type);
     const isInstant = INSTANT_ABILITIES.has(def.type);
 
     return (

@@ -64,12 +64,19 @@ export default function GameMapScreen() {
   const [catchWindowStart, setCatchWindowStart] = useState<number | null>(null);
   const [catchSecondsLeft, setCatchSecondsLeft] = useState(DEFAULT_CATCH_WINDOW_S);
   const [frozenSecondsLeft, setFrozenSecondsLeft] = useState(0);
+  const [freezeLocation, setFreezeLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [freezeTriedToEscape, setFreezeTriedToEscape] = useState(false);
+  const [returnHoldStart, setReturnHoldStart] = useState<number | null>(null);
+  const [returnSecondsLeft, setReturnSecondsLeft] = useState(30);
   const [fugitiveTrail, setFugitiveTrail] = useState<{ lat: number; lng: number }[]>([]);
 
   const oobStartTime = useRef<number | null>(null);
   const fugitiveBroadcastEnd = useRef<number | null>(null);
   const frozenEndRef = useRef<number | null>(null);
+  const myPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<MapView>(null);
+
+  const FREEZE_HOLD_RADIUS_M = 25;
 
   const isFugitive = myGroup?.role === "fugitive";
   const isGMOrHost = session ? canControl(session, deviceId!, null) : false;
@@ -83,7 +90,6 @@ export default function GameMapScreen() {
       (!a.expires_at || new Date(a.expires_at) > now)
   );
   const hasRevealStatic = isFugitive && myActivePowers.some((a) => a.ability?.type === "reveal_static");
-  const hasDroneView = !isFugitive && myActivePowers.some((a) => a.ability?.type === "drone_view");
   const hasTrailReader = !isFugitive && myActivePowers.some((a) => a.ability?.type === "trail_reader");
 
   // Core subscriptions
@@ -100,6 +106,9 @@ export default function GameMapScreen() {
 
   // Passive ability effects (motion detector, trap)
   useAbilityEffects(myPos);
+
+  // Sync myPos to a ref so event-handler closures can read latest position
+  useEffect(() => { myPosRef.current = myPos; }, [myPos]);
 
   // Watch own position for map centering and nearby tasks
   useEffect(() => {
@@ -240,6 +249,10 @@ export default function GameMapScreen() {
           frozenEndRef.current = Date.now() + durationS * 1000;
           setFrozen(true);
           setFrozenSecondsLeft(durationS);
+          setFreezeLocation(myPosRef.current); // lock-in current position
+          setFreezeTriedToEscape(false);
+          setReturnHoldStart(null);
+          setReturnSecondsLeft(30);
         }
       })
       .subscribe();
@@ -247,45 +260,83 @@ export default function GameMapScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [isFugitive, session?.id, myGroup?.id, setFrozen]);
 
-  // Freeze countdown
+  // Freeze: normal countdown (only while seeker hasn't tried to escape)
   useEffect(() => {
-    if (!isFrozen) return;
+    if (!isFrozen || freezeTriedToEscape) return;
     const t = setInterval(() => {
       const left = Math.max(
         0,
         Math.ceil(((frozenEndRef.current ?? 0) - Date.now()) / 1000)
       );
       setFrozenSecondsLeft(left);
-      if (left === 0) setFrozen(false);
+      if (left === 0) {
+        setFrozen(false);
+        setFreezeLocation(null);
+        setFreezeTriedToEscape(false);
+      }
     }, 1000);
     return () => clearInterval(t);
-  }, [isFrozen, setFrozen]);
+  }, [isFrozen, freezeTriedToEscape, setFrozen]);
 
-  // Drone view: seeker with active drone_view gets real-time fugitive position
+  // Freeze: proximity check — detect escape attempts and track return
   useEffect(() => {
-    if (isFugitive || !session || !myGroup || !hasDroneView) return;
+    if (!isFrozen || !freezeLocation || !myPos) return;
 
-    const fugitiveGroup = groups.find((g) => g.role === "fugitive");
-    if (!fugitiveGroup) return;
+    const dist = haversineDistance(myPos, freezeLocation);
+    const inRadius = dist <= FREEZE_HOLD_RADIUS_M;
+
+    if (!freezeTriedToEscape) {
+      if (!inRadius) {
+        setFreezeTriedToEscape(true);
+        setReturnHoldStart(null);
+      }
+    } else {
+      if (inRadius) {
+        if (returnHoldStart === null) {
+          setReturnHoldStart(Date.now());
+        }
+      } else {
+        // Left the area again — reset the return hold timer
+        if (returnHoldStart !== null) setReturnHoldStart(null);
+      }
+    }
+  }, [myPos, isFrozen, freezeLocation, freezeTriedToEscape, returnHoldStart]);
+
+  // Freeze: return-hold countdown (30 s at freeze spot after escape attempt)
+  useEffect(() => {
+    if (!freezeTriedToEscape || returnHoldStart === null) {
+      setReturnSecondsLeft(30);
+      return;
+    }
+    const t = setInterval(() => {
+      const left = Math.max(
+        0,
+        Math.ceil((returnHoldStart + 30_000 - Date.now()) / 1000)
+      );
+      setReturnSecondsLeft(left);
+      if (left === 0) {
+        setFrozen(false);
+        setFreezeLocation(null);
+        setFreezeTriedToEscape(false);
+        setReturnHoldStart(null);
+      }
+    }, 500);
+    return () => clearInterval(t);
+  }, [freezeTriedToEscape, returnHoldStart, setFrozen]);
+
+  // Drone view: seeker receives real-time fugitive reveals when fugitive enters a drone circle
+  useEffect(() => {
+    if (isFugitive || !session || !myGroup) return;
 
     const channel = supabase
-      .channel(`drone:${session.id}:${myGroup.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "group_locations",
-          filter: `group_id=eq.${fugitiveGroup.id}`,
-        },
-        (payload) => {
-          useGameStore.getState().setLastFugitiveReveal(payload.new as GroupLocation);
-        }
-      )
+      .channel(`game:${session.id}:drone:${myGroup.id}`)
+      .on("broadcast", { event: "drone_reveal" }, ({ payload }) => {
+        useGameStore.getState().setLastFugitiveReveal(payload as GroupLocation);
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [isFugitive, session?.id, myGroup?.id, hasDroneView, groups]);
+  }, [isFugitive, session?.id, myGroup?.id]);
 
   // Trail reader: fetch last 10 fugitive positions periodically
   useEffect(() => {
@@ -534,6 +585,23 @@ export default function GameMapScreen() {
           />
         )}
 
+        {/* Freeze hold zone — shows where the frozen seeker must return to */}
+        {isFrozen && freezeLocation && (
+          <Circle
+            center={{ latitude: freezeLocation.lat, longitude: freezeLocation.lng }}
+            radius={FREEZE_HOLD_RADIUS_M}
+            strokeColor={
+              returnHoldStart !== null
+                ? "rgba(52,152,219,0.9)"
+                : freezeTriedToEscape
+                ? "rgba(231,76,60,0.9)"
+                : "rgba(0,85,170,0.7)"
+            }
+            fillColor="rgba(0,85,170,0.1)"
+            strokeWidth={2}
+          />
+        )}
+
         {/* Fugitive trail (trail_reader ability) */}
         {fugitiveTrail.length > 1 && (
           <Polyline
@@ -655,9 +723,19 @@ export default function GameMapScreen() {
         {isFrozen && (
           <View style={styles.frozenOverlay}>
             <Text style={styles.frozenOverlayTitle}>❄️ EINGEFROREN!</Text>
-            <Text style={styles.frozenOverlaySub}>
-              Fähigkeiten gesperrt — noch {frozenSecondsLeft}s
-            </Text>
+            {!freezeTriedToEscape ? (
+              <Text style={styles.frozenOverlaySub}>
+                Bleib stehen — noch {frozenSecondsLeft}s
+              </Text>
+            ) : returnHoldStart !== null ? (
+              <Text style={styles.frozenOverlaySub}>
+                ⏱ Am Marker halten — noch {returnSecondsLeft}s
+              </Text>
+            ) : (
+              <Text style={styles.frozenOverlaySub}>
+                Kehre zu deiner Ausgangsposition zurück!
+              </Text>
+            )}
           </View>
         )}
 

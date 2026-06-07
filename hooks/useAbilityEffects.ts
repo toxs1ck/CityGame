@@ -45,6 +45,38 @@ export function useAbilityEffects(myPos: GeoPoint | null) {
     };
   }, [session?.id, myGroup?.id, isSeeker]);
 
+  // Fugitive: if inside a drone_view circle, reveal position to placing seeker
+  useEffect(() => {
+    if (!myPos || !session || !myGroup || !isFugitive) return;
+
+    const now = new Date();
+    const activeDrones = abilityObjects.filter(
+      (o) =>
+        o.type === "drone_view" &&
+        (!o.expires_at || new Date(o.expires_at) > now)
+    );
+
+    for (const drone of activeDrones) {
+      const center = drone.geometry as GeoPoint;
+      const radius = (drone.metadata?.radius_m as number) ?? 50;
+      if (haversineDistance(myPos, center) <= radius) {
+        supabase
+          .channel(`game:${session.id}:drone:${drone.placed_by_group_id}`)
+          .send({
+            type: "broadcast",
+            event: "drone_reveal",
+            payload: {
+              group_id: myGroup.id,
+              session_id: session.id,
+              lat: myPos.lat,
+              lng: myPos.lng,
+              recorded_at: new Date().toISOString(),
+            },
+          });
+      }
+    }
+  }, [myPos, abilityObjects, session?.id, myGroup?.id, isFugitive]);
+
   // Fugitive: trigger nearby motion detectors
   useEffect(() => {
     if (!myPos || !session || !myGroup || !isFugitive) return;

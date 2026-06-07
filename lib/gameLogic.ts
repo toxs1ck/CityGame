@@ -10,6 +10,7 @@ import type {
   Task,
 } from "../types/game";
 import {
+  DEFAULT_CATCH_WINDOW_S,
   DEFAULT_DURATION_S,
   DEFAULT_HEADSTART_S,
   DEFAULT_LOCATION_UPDATE_INTERVAL_S,
@@ -35,6 +36,10 @@ export function resolveSettings(
       overrides.location_update_interval_s ??
       defaults.location_update_interval_s ??
       DEFAULT_LOCATION_UPDATE_INTERVAL_S,
+    catch_window_s:
+      overrides.catch_window_s ??
+      defaults.catch_window_s ??
+      DEFAULT_CATCH_WINDOW_S,
   };
 }
 
@@ -126,16 +131,26 @@ export function pickNextTask(
   return fresh ?? candidates[0] ?? null;
 }
 
+/**
+ * Cooldown starts AFTER the ability's duration expires.
+ * Ready time = last_used_at + duration_seconds + cooldown_seconds
+ */
 export function isCooldownReady(ability: GroupAbility): boolean {
   if (!ability.last_used_at || !ability.ability?.cooldown_seconds) return true;
-  const elapsed = (Date.now() - new Date(ability.last_used_at).getTime()) / 1000;
-  return elapsed >= ability.ability.cooldown_seconds;
+  const duration = ability.ability.duration_seconds ?? 0;
+  const cooldown = ability.ability.cooldown_seconds;
+  const readyAt =
+    new Date(ability.last_used_at).getTime() + (duration + cooldown) * 1000;
+  return Date.now() >= readyAt;
 }
 
 export function cooldownRemainingSeconds(ability: GroupAbility): number {
   if (!ability.last_used_at || !ability.ability?.cooldown_seconds) return 0;
-  const elapsed = (Date.now() - new Date(ability.last_used_at).getTime()) / 1000;
-  return Math.max(0, ability.ability.cooldown_seconds - elapsed);
+  const duration = ability.ability.duration_seconds ?? 0;
+  const cooldown = ability.ability.cooldown_seconds;
+  const readyAt =
+    new Date(ability.last_used_at).getTime() + (duration + cooldown) * 1000;
+  return Math.max(0, (readyAt - Date.now()) / 1000);
 }
 
 export function isSessionHost(session: GameSession, deviceId: string): boolean {
