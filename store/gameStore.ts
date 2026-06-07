@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { GameSession, Group, GroupLocation, POI, AbilityObject } from "../types/game";
+import type { GameSession, Group, GroupLocation, POI, AbilityObject, ActiveAbility } from "../types/game";
 
 interface GameState {
   session: GameSession | null;
@@ -8,6 +8,7 @@ interface GameState {
   lastFugitiveReveal: GroupLocation | null;
   pois: POI[];
   abilityObjects: AbilityObject[];
+  allActiveAbilities: ActiveAbility[];
 
   setSession: (session: GameSession | null) => void;
   setGroups: (groups: Group[]) => void;
@@ -17,6 +18,7 @@ interface GameState {
   setAbilityObjects: (objects: AbilityObject[]) => void;
   addAbilityObject: (obj: AbilityObject) => void;
   removeAbilityObject: (id: string) => void;
+  setAllActiveAbilities: (abilities: ActiveAbility[]) => void;
   reset: () => void;
 }
 
@@ -27,6 +29,7 @@ export const useGameStore = create<GameState>((set) => ({
   lastFugitiveReveal: null,
   pois: [],
   abilityObjects: [],
+  allActiveAbilities: [],
 
   setSession: (session) => set({ session }),
   setGroups: (groups) => set({ groups }),
@@ -51,6 +54,8 @@ export const useGameStore = create<GameState>((set) => ({
   removeAbilityObject: (id) =>
     set((s) => ({ abilityObjects: s.abilityObjects.filter((o) => o.id !== id) })),
 
+  setAllActiveAbilities: (abilities) => set({ allActiveAbilities: abilities }),
+
   reset: () =>
     set({
       session: null,
@@ -59,5 +64,6 @@ export const useGameStore = create<GameState>((set) => ({
       lastFugitiveReveal: null,
       pois: [],
       abilityObjects: [],
+      allActiveAbilities: [],
     }),
 }));

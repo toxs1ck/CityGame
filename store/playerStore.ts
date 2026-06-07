@@ -8,6 +8,8 @@ interface PlayerState {
   myTasks: AssignedTask[];
   activeAbilities: ActiveAbility[];
   isOobPunished: boolean;
+  isFrozen: boolean;
+  isTrapped: boolean;
 
   setDeviceId: (id: string) => void;
   setMyGroup: (group: Group | null) => void;
@@ -15,6 +17,8 @@ interface PlayerState {
   setMyTasks: (tasks: AssignedTask[]) => void;
   setActiveAbilities: (abilities: ActiveAbility[]) => void;
   setOobPunished: (val: boolean) => void;
+  setFrozen: (val: boolean) => void;
+  setTrapped: (val: boolean) => void;
   updateTaskStatus: (taskId: string, status: AssignedTask["status"]) => void;
   updateAbilityLastUsed: (abilityId: string) => void;
   reset: () => void;
@@ -27,6 +31,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   myTasks: [],
   activeAbilities: [],
   isOobPunished: false,
+  isFrozen: false,
+  isTrapped: false,
 
   setDeviceId: (id) => set({ deviceId: id }),
   setMyGroup: (group) => set({ myGroup: group }),
@@ -34,6 +40,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setMyTasks: (tasks) => set({ myTasks: tasks }),
   setActiveAbilities: (abilities) => set({ activeAbilities: abilities }),
   setOobPunished: (val) => set({ isOobPunished: val }),
+  setFrozen: (val) => set({ isFrozen: val }),
+  setTrapped: (val) => set({ isTrapped: val }),
 
   updateTaskStatus: (assignedTaskId, status) =>
     set((s) => ({
@@ -60,5 +68,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       myTasks: [],
       activeAbilities: [],
       isOobPunished: false,
+      isFrozen: false,
+      isTrapped: false,
     }),
 }));

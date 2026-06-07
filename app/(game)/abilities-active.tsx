@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
   Alert,
   ActivityIndicator,
   ScrollView,
@@ -53,8 +52,8 @@ async function getCurrentPos(): Promise<{ lat: number; lng: number } | null> {
 }
 
 export default function AbilitiesActiveScreen() {
-  const { myAbilities, myGroup, updateAbilityLastUsed, isOobPunished } = usePlayerStore();
-  const { session, pois, groups } = useGameStore();
+  const { myAbilities, myGroup, updateAbilityLastUsed, isOobPunished, isFrozen, isTrapped } = usePlayerStore();
+  const { session, pois, groups, latestLocations } = useGameStore();
   const [activating, setActivating] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -137,11 +136,55 @@ export default function AbilitiesActiveScreen() {
       await activateInstant(def, ga);
     } else if (PLACEMENT_ABILITIES.has(def.type)) {
       await activatePlacement(def, ga);
+    } else if (def.type === "freeze") {
+      await activateFreeze(def, ga);
     } else {
-      // Timed/passive abilities (radar_jam, stealth, freeze, skip_ping, dark_mode, zone_pass)
+      // Timed/passive abilities (radar_jam, stealth, skip_ping, dark_mode, zone_pass)
       await recordUsage(def, ga);
       Alert.alert("Aktiviert!", `${def.name} ist jetzt aktiv.`);
     }
+  }
+
+  async function activateFreeze(def: AbilityDefinition, ga: GroupAbility) {
+    if (!myGroup || !session) return;
+    const myPos = await getCurrentPos();
+    if (!myPos) {
+      Alert.alert("Fehler", "GPS-Position nicht verfügbar.");
+      return;
+    }
+
+    const seekerGroups = groups.filter((g) => g.role === "seeker");
+    let nearest: { groupId: string; name: string } | null = null;
+    let nearestDist = Infinity;
+
+    for (const sg of seekerGroups) {
+      const loc = latestLocations.get(sg.id);
+      if (!loc) continue;
+      const d = haversineDistance(myPos, { lat: loc.lat, lng: loc.lng });
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = { groupId: sg.id, name: sg.name };
+      }
+    }
+
+    if (!nearest) {
+      Alert.alert("Kein Ziel", "Kein Detektiv-Standort bekannt.");
+      return;
+    }
+
+    await recordUsage(def, ga);
+    const durationS = def.duration_seconds ?? 180;
+
+    supabase.channel(`game:${session.id}:freeze`).send({
+      type: "broadcast",
+      event: "freeze_applied",
+      payload: { target_group_id: nearest.groupId, duration_s: durationS },
+    });
+
+    Alert.alert(
+      "❄️ Eingefroren!",
+      `${nearest.name} wurde für ${Math.round(durationS / 60)} Min. eingefroren.`
+    );
   }
 
   async function activateInstant(def: AbilityDefinition, ga: GroupAbility) {
@@ -261,7 +304,12 @@ export default function AbilitiesActiveScreen() {
       type: def.type,
       geometry: { lat: myPos.lat, lng: myPos.lng },
       expires_at: expiresAt,
-      metadata: { radius_m: radiusM },
+      metadata: {
+        radius_m: radiusM,
+        ...(def.type === "trap"
+          ? { duration_s: (def.effect_config?.duration_s as number) ?? 300 }
+          : {}),
+      },
     });
 
     if (error) {
@@ -307,7 +355,7 @@ export default function AbilitiesActiveScreen() {
           !canAfford && styles.cardNoAP,
         ]}
         onPress={() => activate(item)}
-        disabled={activating === item.id || isOobPunished}
+        disabled={activating === item.id || isOobPunished || isFrozen || isTrapped}
       >
         <View style={styles.cardTop}>
           <Text style={styles.abilityName}>{def.name}</Text>
@@ -362,6 +410,18 @@ export default function AbilitiesActiveScreen() {
         </View>
       )}
 
+      {isFrozen && (
+        <View style={styles.frozenBanner}>
+          <Text style={styles.frozenBannerText}>❄️ Eingefroren – Fähigkeiten gesperrt</Text>
+        </View>
+      )}
+
+      {isTrapped && (
+        <View style={styles.trapBanner}>
+          <Text style={styles.trapBannerText}>🪤 In einer Falle – Fähigkeiten gesperrt</Text>
+        </View>
+      )}
+
       {normal.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Normale Fähigkeiten</Text>
@@ -394,6 +454,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   oobBannerText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  frozenBanner: {
+    backgroundColor: "#0055AA",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  frozenBannerText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  trapBanner: {
+    backgroundColor: "#6B3A2A",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  trapBannerText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   apBar: {
     flexDirection: "row",
     justifyContent: "space-between",
