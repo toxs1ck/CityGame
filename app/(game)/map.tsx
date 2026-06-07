@@ -71,6 +71,7 @@ export default function GameMapScreen() {
   const fugitiveBroadcastEnd = useRef<number | null>(null);
   const frozenEndRef = useRef<number | null>(null);
   const wasInFreezeZoneRef = useRef(true);
+  const leftFreezeZoneAtRef = useRef<number | null>(null);
   const myPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<MapView>(null);
 
@@ -245,6 +246,7 @@ export default function GameMapScreen() {
         if (payload.target_group_id === myGroup.id) {
           const durationS = payload.duration_s ?? 180;
           frozenEndRef.current = Date.now() + durationS * 1000;
+          leftFreezeZoneAtRef.current = null;
           setFrozen(true);
           setFrozenSecondsLeft(durationS);
           setFreezeLocation(myPosRef.current); // lock-in current position
@@ -256,16 +258,19 @@ export default function GameMapScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [isFugitive, session?.id, myGroup?.id, setFrozen]);
 
-  // Freeze countdown — runs continuously; time is extended by +30 s each time the seeker leaves the zone
+  // Freeze countdown — pauses while seeker is outside the zone; releases only when inside
   useEffect(() => {
     if (!isFrozen) return;
     const t = setInterval(() => {
-      const left = Math.max(
-        0,
-        Math.ceil(((frozenEndRef.current ?? 0) - Date.now()) / 1000)
-      );
+      let endTime = frozenEndRef.current ?? 0;
+      // If outside, compensate so displayed time stays frozen
+      if (leftFreezeZoneAtRef.current !== null) {
+        endTime += Date.now() - leftFreezeZoneAtRef.current;
+      }
+      const left = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
       setFrozenSecondsLeft(left);
-      if (left === 0) {
+      // Only release when seeker is inside the zone
+      if (left === 0 && leftFreezeZoneAtRef.current === null) {
         setFrozen(false);
         setFreezeLocation(null);
         wasInFreezeZoneRef.current = true;
@@ -274,15 +279,22 @@ export default function GameMapScreen() {
     return () => clearInterval(t);
   }, [isFrozen, setFrozen]);
 
-  // Freeze proximity check — adds 30 s penalty each time seeker exits the zone
+  // Freeze proximity check — pauses countdown while outside, adds +30 s penalty on each exit
   useEffect(() => {
     if (!isFrozen || !freezeLocation || !myPos) return;
 
     const inRadius = haversineDistance(myPos, freezeLocation) <= FREEZE_HOLD_RADIUS_M;
 
     if (wasInFreezeZoneRef.current && !inRadius) {
-      // Exited: add 30 s penalty
+      // Exited: add 30 s penalty and record exit time to pause countdown
       frozenEndRef.current = (frozenEndRef.current ?? Date.now()) + 30_000;
+      leftFreezeZoneAtRef.current = Date.now();
+    } else if (!wasInFreezeZoneRef.current && inRadius) {
+      // Re-entered: extend end time by time spent outside (restores paused duration)
+      if (leftFreezeZoneAtRef.current !== null) {
+        frozenEndRef.current = (frozenEndRef.current ?? Date.now()) + (Date.now() - leftFreezeZoneAtRef.current);
+        leftFreezeZoneAtRef.current = null;
+      }
     }
     wasInFreezeZoneRef.current = inRadius;
   }, [myPos, isFrozen, freezeLocation]);
