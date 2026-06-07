@@ -53,7 +53,7 @@ async function getCurrentPos(): Promise<{ lat: number; lng: number } | null> {
 
 export default function AbilitiesActiveScreen() {
   const { myAbilities, myGroup, updateAbilityLastUsed } = usePlayerStore();
-  const { session, lastFugitiveReveal, pois, groups } = useGameStore();
+  const { session, pois, groups } = useGameStore();
   const [activating, setActivating] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -150,80 +150,84 @@ export default function AbilitiesActiveScreen() {
       return;
     }
 
-    if (def.type === "compass" || def.type === "distance_reveal") {
-      if (!lastFugitiveReveal) {
-        Alert.alert(
-          "Kein Signal",
-          "Der Flüchtige wurde noch nicht gesendet. Versuche es nach dem nächsten Ping."
-        );
-        return;
-      }
-      const fugPos = { lat: lastFugitiveReveal.lat, lng: lastFugitiveReveal.lng };
+    // All instant abilities need the fugitive's actual current position from DB
+    const fugitiveGroup = groups.find((g) => g.role === "fugitive");
+    if (!fugitiveGroup) {
+      Alert.alert("Fehler", "Kein Flüchtiger gefunden.");
+      return;
+    }
 
-      if (def.type === "compass") {
-        const bearing = bearingDegrees(myPos, fugPos);
-        const dir = compassDirection(bearing);
-        Alert.alert(
-          "🧭 Kompass",
-          `Richtung zum Flüchtigen:\n\n${dir}  (${Math.round(bearing)}°)\n\nBasierend auf letztem bekanntem Standort.`
-        );
-      } else {
-        const dist = haversineDistance(myPos, fugPos);
-        Alert.alert(
-          "📏 Distanz",
-          `Entfernung zum letzten bekannten Standort:\n\n${formatDistance(dist)}`
-        );
-      }
+    const { data: fugLoc } = await supabase
+      .from("group_locations")
+      .select("lat, lng, recorded_at")
+      .eq("group_id", fugitiveGroup.id)
+      .order("recorded_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!fugLoc) {
+      Alert.alert(
+        "Kein Signal",
+        "Noch kein Standort des Flüchtigen verfügbar. Versuche es später erneut."
+      );
+      return;
+    }
+
+    const fugPos = { lat: fugLoc.lat, lng: fugLoc.lng };
+    const age = Math.round(
+      (Date.now() - new Date(fugLoc.recorded_at).getTime()) / 1000
+    );
+    const ageLabel = age < 60 ? `vor ${age}s` : `vor ${Math.round(age / 60)} min`;
+
+    if (def.type === "compass") {
+      const bearing = bearingDegrees(myPos, fugPos);
+      const dir = compassDirection(bearing);
+      Alert.alert(
+        "🧭 Kompass",
+        `Richtung zum Flüchtigen:\n\n${dir}  (${Math.round(bearing)}°)\n\nStandort aktualisiert ${ageLabel}.`
+      );
+    }
+
+    if (def.type === "distance_reveal") {
+      const dist = haversineDistance(myPos, fugPos);
+      Alert.alert(
+        "📏 Distanz",
+        `Entfernung zum Flüchtigen:\n\n${formatDistance(dist)}\n\nStandort aktualisiert ${ageLabel}.`
+      );
     }
 
     if (def.type === "poi_proximity_reveal") {
-      if (!lastFugitiveReveal) {
-        Alert.alert("Kein Signal", "Noch kein Flüchtig-Ping vorhanden.");
-        return;
-      }
-      const fugPos = { lat: lastFugitiveReveal.lat, lng: lastFugitiveReveal.lng };
       if (pois.length === 0) {
         Alert.alert("Keine POIs", "Keine Standorte im Szenario vorhanden.");
         return;
       }
       let closest = pois[0];
-      let closestDist = haversineDistance(fugPos, { lat: pois[0].lat, lng: pois[0].lng });
+      let closestDist = haversineDistance(fugPos, {
+        lat: pois[0].lat,
+        lng: pois[0].lng,
+      });
       for (const poi of pois.slice(1)) {
         const d = haversineDistance(fugPos, { lat: poi.lat, lng: poi.lng });
-        if (d < closestDist) { closestDist = d; closest = poi; }
+        if (d < closestDist) {
+          closestDist = d;
+          closest = poi;
+        }
       }
       Alert.alert(
         "📍 POI-Nähe",
-        `Der Flüchtige ist in der Nähe von:\n\n${closest.name}\n(${formatDistance(closestDist)} entfernt)`
+        `Der Flüchtige ist in der Nähe von:\n\n${closest.name}\n(${formatDistance(closestDist)} entfernt)\n\nStandort aktualisiert ${ageLabel}.`
       );
     }
 
     if (def.type === "exact_location") {
-      const fugitiveGroup = groups.find((g) => g.role === "fugitive");
-      if (!fugitiveGroup) { Alert.alert("Fehler", "Kein Flüchtiger gefunden."); return; }
-
-      const { data } = await supabase
-        .from("group_locations")
-        .select("lat, lng, recorded_at")
-        .eq("group_id", fugitiveGroup.id)
-        .order("recorded_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (!data) {
-        Alert.alert("Kein Signal", "Noch kein Standort des Flüchtigen verfügbar.");
-        return;
-      }
-
-      const bearing = bearingDegrees(myPos, { lat: data.lat, lng: data.lng });
-      const dist = haversineDistance(myPos, { lat: data.lat, lng: data.lng });
-      const age = Math.round((Date.now() - new Date(data.recorded_at).getTime()) / 1000);
+      const bearing = bearingDegrees(myPos, fugPos);
+      const dist = haversineDistance(myPos, fugPos);
       Alert.alert(
         "🎯 Exakter Standort",
         `Aktueller Standort des Flüchtigen:\n\n` +
           `Richtung: ${compassDirection(bearing)} (${Math.round(bearing)}°)\n` +
           `Entfernung: ${formatDistance(dist)}\n\n` +
-          `Aktualisiert vor ${age}s`
+          `Standort aktualisiert ${ageLabel}.`
       );
     }
 
