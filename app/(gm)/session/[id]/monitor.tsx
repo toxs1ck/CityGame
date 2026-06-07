@@ -30,7 +30,7 @@ export default function MonitorScreen() {
 
   useAllGroupLocations(sessionId);
   useFugitiveRevealBroadcast(localSession?.status === "active");
-  useCatchDetection(localSession?.status === "active");
+  const { catchInProgress, catchSeekerName } = useCatchDetection(localSession?.status === "active");
 
   useEffect(() => {
     loadSession();
@@ -214,9 +214,15 @@ export default function MonitorScreen() {
         <View style={styles.codeRow}>
           <Text style={styles.label}>JOIN-CODE</Text>
           <Text style={styles.joinCode}>{localSession?.join_code}</Text>
-          <Text style={[styles.statusBadge, localSession?.status === "active" && styles.statusActive]}>
-            {localSession?.status === "lobby" ? "🟡 Lobby" : localSession?.status === "active" ? "🟢 Aktiv" : "⛔ Beendet"}
-          </Text>
+          {catchInProgress ? (
+            <View style={styles.catchBadge}>
+              <Text style={styles.catchBadgeText}>⏱ {catchSeekerName} fängt…</Text>
+            </View>
+          ) : (
+            <Text style={[styles.statusBadge, localSession?.status === "active" && styles.statusActive]}>
+              {localSession?.status === "lobby" ? "🟡 Lobby" : localSession?.status === "active" ? "🟢 Aktiv" : "⛔ Beendet"}
+            </Text>
+          )}
         </View>
 
         <ScrollView style={styles.groupList} contentContainerStyle={{ gap: 8 }}>
@@ -351,6 +357,14 @@ const styles = StyleSheet.create({
   joinCode: { color: "#fff", fontWeight: "900", fontSize: 22, letterSpacing: 4 },
   statusBadge: { marginLeft: "auto", color: "#F39C12", fontWeight: "600" },
   statusActive: { color: "#2ECC71" },
+  catchBadge: {
+    marginLeft: "auto",
+    backgroundColor: "#E74C3C",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  catchBadgeText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   groupList: { flex: 1, marginBottom: 12 },
   groupRow: {
     flexDirection: "row",

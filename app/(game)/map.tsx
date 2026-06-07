@@ -44,6 +44,9 @@ export default function GameMapScreen() {
   const [isPunished, setIsPunished] = useState(false);
   const oobStartTime = useRef<number | null>(null);
   const fugitiveBroadcastEnd = useRef<number | null>(null);
+  const [isCatching, setIsCatching] = useState(false);
+  const [catchWindowStart, setCatchWindowStart] = useState<number | null>(null);
+  const [catchSecondsLeft, setCatchSecondsLeft] = useState(10);
   const mapRef = useRef<MapView>(null);
 
   const isFugitive = myGroup?.role === "fugitive";
@@ -133,6 +136,40 @@ export default function GameMapScreen() {
     }, 1000);
     return () => clearInterval(t);
   }, [isOutside, setOobPunished]);
+
+  // Catch window: seekers subscribe to broadcast from GM/host device
+  useEffect(() => {
+    if (isFugitive || !session || !myGroup) return;
+
+    const channel = supabase
+      .channel(`game:${session.id}:catch`)
+      .on("broadcast", { event: "catch_window_open" }, ({ payload }) => {
+        if (payload.seeker_group_id === myGroup.id) {
+          setCatchWindowStart(Date.now());
+          setIsCatching(true);
+          setCatchSecondsLeft(10);
+        }
+      })
+      .on("broadcast", { event: "catch_window_cancelled" }, ({ payload }) => {
+        if (payload.seeker_group_id === myGroup.id) {
+          setIsCatching(false);
+          setCatchWindowStart(null);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [isFugitive, session?.id, myGroup?.id]);
+
+  // Catch countdown: tick every 100 ms while catch window is open
+  useEffect(() => {
+    if (!isCatching || catchWindowStart === null) return;
+    const t = setInterval(() => {
+      const elapsed = (Date.now() - catchWindowStart) / 1000;
+      setCatchSecondsLeft(Math.max(0, Math.ceil(10 - elapsed)));
+    }, 100);
+    return () => clearInterval(t);
+  }, [isCatching, catchWindowStart]);
 
   // Game timer
   useEffect(() => {
@@ -376,13 +413,27 @@ export default function GameMapScreen() {
 
       {/* Bottom panel */}
       <SafeAreaView style={styles.bottomPanel} pointerEvents="box-none">
-        {/* Catch button — only visible for seekers near the last reveal */}
-        {canAttemptCatch && (
+        {/* Active catch window — seeker must stay within range for 10 s */}
+        {isCatching && (
+          <View style={styles.catchWindow}>
+            <Text style={styles.catchWindowTitle}>🎯 FANGEN!</Text>
+            <Text style={styles.catchWindowSub}>Bleib nah dran!</Text>
+            <View style={styles.catchBarTrack}>
+              <View
+                style={[
+                  styles.catchBarFill,
+                  { width: `${((10 - catchSecondsLeft) / 10) * 100}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.catchWindowCountdown}>{catchSecondsLeft}s</Text>
+          </View>
+        )}
+
+        {/* Proximity hint — seeker is near the last reveal position */}
+        {!isCatching && canAttemptCatch && (
           <View style={styles.catchBanner}>
             <Text style={styles.catchText}>🎯 Du bist nah dran!</Text>
-            <Text style={styles.catchSub}>
-              Der Game Master wird benachrichtigt.
-            </Text>
           </View>
         )}
 
@@ -521,16 +572,44 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
+  catchWindow: {
+    margin: 12,
+    marginBottom: 0,
+    backgroundColor: "#C0392B",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+  },
+  catchWindowTitle: { color: "#fff", fontWeight: "900", fontSize: 22, letterSpacing: 1 },
+  catchWindowSub: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginTop: 2 },
+  catchBarTrack: {
+    width: "100%",
+    height: 8,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    borderRadius: 4,
+    marginTop: 12,
+    overflow: "hidden",
+  },
+  catchBarFill: {
+    height: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 4,
+  },
+  catchWindowCountdown: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 32,
+    marginTop: 6,
+  },
   catchBanner: {
     margin: 12,
     marginBottom: 0,
-    backgroundColor: "#E74C3C",
+    backgroundColor: "rgba(231,76,60,0.85)",
     borderRadius: 16,
-    padding: 14,
+    padding: 12,
     alignItems: "center",
   },
-  catchText: { color: "#fff", fontWeight: "800", fontSize: 16 },
-  catchSub: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 },
+  catchText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   taskAlert: {
     margin: 12,
     backgroundColor: "#F39C12",
