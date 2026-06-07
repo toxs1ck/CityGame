@@ -22,7 +22,7 @@ import { useActiveAbilitiesSubscription } from "../../hooks/useActiveAbilitiesSu
 import { useAbilityObjectsSubscription } from "../../hooks/useAbilityObjectsSubscription";
 import { supabase } from "../../lib/supabase";
 import { canControl, formatDuration } from "../../lib/gameLogic";
-import { haversineDistance } from "../../lib/geo";
+import { haversineDistance, isInsidePolygon } from "../../lib/geo";
 import { DEFAULT_REVEAL_INTERVAL_S, DEFAULT_HEADSTART_S, CATCH_RADIUS_M } from "../../constants/game";
 import type { AbilityObject, GeoPoint, GeoPolygon } from "../../types/game";
 
@@ -35,11 +35,15 @@ export default function GameMapScreen() {
     pois,
     abilityObjects,
   } = useGameStore();
-  const { myGroup, deviceId, myTasks } = usePlayerStore();
+  const { myGroup, deviceId, myTasks, setOobPunished } = usePlayerStore();
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [revealCountdown, setRevealCountdown] = useState(0);
   const [headstartLeft, setHeadstartLeft] = useState(0);
+  const [isOutside, setIsOutside] = useState(false);
+  const [isPunished, setIsPunished] = useState(false);
+  const oobStartTime = useRef<number | null>(null);
+  const fugitiveBroadcastEnd = useRef<number | null>(null);
   const mapRef = useRef<MapView>(null);
 
   const isFugitive = myGroup?.role === "fugitive";
@@ -73,6 +77,62 @@ export default function GameMapScreen() {
       sub?.remove();
     };
   }, []);
+
+  // Boundary enforcement — check on every position update
+  useEffect(() => {
+    if (!myPos || !gameArea) return;
+
+    const inside = isInsidePolygon(myPos, gameArea);
+
+    if (inside) {
+      if (isOutside && isFugitive) {
+        fugitiveBroadcastEnd.current = Date.now() + 30_000;
+      }
+      oobStartTime.current = null;
+      setIsOutside(false);
+    } else {
+      if (!isOutside) {
+        oobStartTime.current = Date.now();
+      }
+      setIsOutside(true);
+    }
+
+    // Fugitive: broadcast position while OOB or within the 30s grace window after re-entry
+    if (
+      isFugitive &&
+      myGroup &&
+      session &&
+      (!inside ||
+        (fugitiveBroadcastEnd.current !== null &&
+          Date.now() < fugitiveBroadcastEnd.current))
+    ) {
+      const ch = supabase.channel(`game:${session.id}:reveal`);
+      ch.send({
+        type: "broadcast",
+        event: "fugitive_reveal",
+        payload: {
+          group_id: myGroup.id,
+          session_id: session.id,
+          lat: myPos.lat,
+          lng: myPos.lng,
+          recorded_at: new Date().toISOString(),
+        },
+      });
+    }
+  }, [myPos, gameArea, isFugitive, isOutside, session, myGroup]);
+
+  // Punishment: disable abilities + hide groups after 60 s OOB
+  useEffect(() => {
+    const t = setInterval(() => {
+      const punished =
+        isOutside &&
+        oobStartTime.current !== null &&
+        Date.now() - oobStartTime.current >= 60_000;
+      setIsPunished(punished);
+      setOobPunished(punished);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isOutside, setOobPunished]);
 
   // Game timer
   useEffect(() => {
@@ -131,11 +191,13 @@ export default function GameMapScreen() {
     haversineDistance(myPos, { lat: lastFugitiveReveal.lat, lng: lastFugitiveReveal.lng }) <=
       CATCH_RADIUS_M * 3;
 
-  const visibleGroups = groups.filter((g) => {
-    if (g.id === myGroup?.id) return false;
-    if (isFugitive) return g.role === "seeker";
-    return g.role === "fugitive";
-  });
+  const visibleGroups = isPunished
+    ? []
+    : groups.filter((g) => {
+        if (g.id === myGroup?.id) return false;
+        if (isFugitive) return g.role === "seeker";
+        return g.role === "fugitive";
+      });
 
   const gameArea = session
     ? ((session as any).scenario?.game_area as GeoPolygon | null)
@@ -283,6 +345,16 @@ export default function GameMapScreen() {
           </View>
         </View>
 
+        {/* OOB warning */}
+        {isOutside && (
+          <View style={styles.oobWarning}>
+            <Text style={styles.oobWarningText}>Außerhalb des Spielfelds!</Text>
+            {isPunished && (
+              <Text style={styles.oobWarningText}>Fähigkeiten & Sicht deaktiviert</Text>
+            )}
+          </View>
+        )}
+
         {/* Headstart banner for seekers */}
         {!isFugitive && headstartLeft > 0 && (
           <View style={styles.headstartBanner}>
@@ -418,6 +490,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   apText: { color: "#F39C12", fontWeight: "700", fontSize: 14 },
+  oobWarning: {
+    marginTop: 8,
+    backgroundColor: "rgba(204,0,0,0.9)",
+    borderRadius: 10,
+    padding: 8,
+    alignItems: "center",
+    gap: 2,
+  },
+  oobWarningText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   headstartBanner: {
     marginTop: 8,
     backgroundColor: "rgba(155,89,182,0.9)",

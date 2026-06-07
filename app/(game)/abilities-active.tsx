@@ -52,7 +52,7 @@ async function getCurrentPos(): Promise<{ lat: number; lng: number } | null> {
 }
 
 export default function AbilitiesActiveScreen() {
-  const { myAbilities, myGroup, updateAbilityLastUsed } = usePlayerStore();
+  const { myAbilities, myGroup, updateAbilityLastUsed, isOobPunished } = usePlayerStore();
   const { session, pois, groups } = useGameStore();
   const [activating, setActivating] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -301,7 +301,7 @@ export default function AbilitiesActiveScreen() {
           !canAfford && styles.cardNoAP,
         ]}
         onPress={() => activate(item)}
-        disabled={activating === item.id}
+        disabled={activating === item.id || isOobPunished}
       >
         <View style={styles.cardTop}>
           <Text style={styles.abilityName}>{def.name}</Text>
@@ -350,6 +350,12 @@ export default function AbilitiesActiveScreen() {
         <Text style={styles.apValue}>⚡ {myGroup?.action_points ?? 0} AP</Text>
       </View>
 
+      {isOobPunished && (
+        <View style={styles.oobBanner}>
+          <Text style={styles.oobBannerText}>Außerhalb des Spielfelds – Fähigkeiten gesperrt</Text>
+        </View>
+      )}
+
       {normal.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Normale Fähigkeiten</Text>
@@ -374,6 +380,14 @@ export default function AbilitiesActiveScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0f0f23" },
   content: { padding: 16, paddingBottom: 48 },
+  oobBanner: {
+    backgroundColor: "#CC0000",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  oobBannerText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   apBar: {
     flexDirection: "row",
     justifyContent: "space-between",

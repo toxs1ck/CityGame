@@ -7,12 +7,14 @@ interface PlayerState {
   myAbilities: GroupAbility[];
   myTasks: AssignedTask[];
   activeAbilities: ActiveAbility[];
+  isOobPunished: boolean;
 
   setDeviceId: (id: string) => void;
   setMyGroup: (group: Group | null) => void;
   setMyAbilities: (abilities: GroupAbility[]) => void;
   setMyTasks: (tasks: AssignedTask[]) => void;
   setActiveAbilities: (abilities: ActiveAbility[]) => void;
+  setOobPunished: (val: boolean) => void;
   updateTaskStatus: (taskId: string, status: AssignedTask["status"]) => void;
   updateAbilityLastUsed: (abilityId: string) => void;
   reset: () => void;
@@ -24,12 +26,14 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   myAbilities: [],
   myTasks: [],
   activeAbilities: [],
+  isOobPunished: false,
 
   setDeviceId: (id) => set({ deviceId: id }),
   setMyGroup: (group) => set({ myGroup: group }),
   setMyAbilities: (abilities) => set({ myAbilities: abilities }),
   setMyTasks: (tasks) => set({ myTasks: tasks }),
   setActiveAbilities: (abilities) => set({ activeAbilities: abilities }),
+  setOobPunished: (val) => set({ isOobPunished: val }),
 
   updateTaskStatus: (assignedTaskId, status) =>
     set((s) => ({
@@ -55,5 +59,6 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       myAbilities: [],
       myTasks: [],
       activeAbilities: [],
+      isOobPunished: false,
     }),
 }));
