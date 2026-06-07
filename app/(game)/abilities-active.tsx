@@ -22,8 +22,9 @@ import {
   bearingDegrees,
   compassDirection,
   formatDistance,
+  computeGameAreaScale,
 } from "../../lib/geo";
-import type { GroupAbility, AbilityDefinition } from "../../types/game";
+import type { GroupAbility, AbilityDefinition, GeoPolygon } from "../../types/game";
 
 /** Abilities that compute an instant result and don't need a map object. */
 const INSTANT_ABILITIES = new Set([
@@ -245,9 +246,14 @@ export default function AbilitiesActiveScreen() {
       ? new Date(Date.now() + def.duration_seconds * 1000).toISOString()
       : null;
 
-    const radiusM =
-      (def.effect_config?.radius_m as number | undefined) ??
-      (def.type === "motion_detector" ? 50 : 100);
+    const gameArea = session
+      ? ((session as any).scenario?.game_area as GeoPolygon | null)
+      : null;
+    const areaScale = gameArea ? computeGameAreaScale(gameArea) : 1.0;
+    const radiusM = Math.round(
+      ((def.effect_config?.radius_m as number | undefined) ??
+        (def.type === "motion_detector" ? 50 : 100)) * areaScale
+    );
 
     const { error } = await supabase.from("ability_objects").insert({
       session_id: session!.id,

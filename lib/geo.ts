@@ -67,3 +67,19 @@ export function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
 }
+
+/**
+ * Returns a scale factor based on the bounding-box diagonal of a game area polygon.
+ * Reference: 1000 m diagonal → 1.0. Clamped to [0.5, 3.0].
+ * Used to size ability radii proportionally to the play area.
+ */
+export function computeGameAreaScale(polygon: GeoPolygon): number {
+  const coords = polygon.coordinates[0]; // [lng, lat] pairs
+  const lats = coords.map((c) => c[1]);
+  const lngs = coords.map((c) => c[0]);
+  const diagonal = haversineDistance(
+    { lat: Math.min(...lats), lng: Math.min(...lngs) },
+    { lat: Math.max(...lats), lng: Math.max(...lngs) }
+  );
+  return Math.min(3.0, Math.max(0.5, diagonal / 1000));
+}

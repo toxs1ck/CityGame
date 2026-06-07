@@ -23,7 +23,7 @@ import { useAbilityObjectsSubscription } from "../../hooks/useAbilityObjectsSubs
 import { supabase } from "../../lib/supabase";
 import { canControl, formatDuration } from "../../lib/gameLogic";
 import { haversineDistance, isInsidePolygon } from "../../lib/geo";
-import { DEFAULT_REVEAL_INTERVAL_S, DEFAULT_HEADSTART_S, CATCH_RADIUS_M } from "../../constants/game";
+import { DEFAULT_REVEAL_INTERVAL_S, DEFAULT_HEADSTART_S, CATCH_RADIUS_M, DEFAULT_CATCH_WINDOW_S } from "../../constants/game";
 import type { AbilityObject, GeoPoint, GeoPolygon } from "../../types/game";
 
 export default function GameMapScreen() {
@@ -46,11 +46,12 @@ export default function GameMapScreen() {
   const fugitiveBroadcastEnd = useRef<number | null>(null);
   const [isCatching, setIsCatching] = useState(false);
   const [catchWindowStart, setCatchWindowStart] = useState<number | null>(null);
-  const [catchSecondsLeft, setCatchSecondsLeft] = useState(10);
+  const [catchSecondsLeft, setCatchSecondsLeft] = useState(DEFAULT_CATCH_WINDOW_S);
   const mapRef = useRef<MapView>(null);
 
   const isFugitive = myGroup?.role === "fugitive";
   const isGMOrHost = session ? canControl(session, deviceId!, null) : false;
+  const catchWindow = session?.settings.catch_window_s ?? DEFAULT_CATCH_WINDOW_S;
 
   // Core subscriptions
   useLocationTracking(!!session && session.status === "active");
@@ -147,7 +148,7 @@ export default function GameMapScreen() {
         if (payload.seeker_group_id === myGroup.id) {
           setCatchWindowStart(Date.now());
           setIsCatching(true);
-          setCatchSecondsLeft(10);
+          setCatchSecondsLeft(catchWindow);
         }
       })
       .on("broadcast", { event: "catch_window_cancelled" }, ({ payload }) => {
@@ -166,10 +167,10 @@ export default function GameMapScreen() {
     if (!isCatching || catchWindowStart === null) return;
     const t = setInterval(() => {
       const elapsed = (Date.now() - catchWindowStart) / 1000;
-      setCatchSecondsLeft(Math.max(0, Math.ceil(10 - elapsed)));
+      setCatchSecondsLeft(Math.max(0, Math.ceil(catchWindow - elapsed)));
     }, 100);
     return () => clearInterval(t);
-  }, [isCatching, catchWindowStart]);
+  }, [isCatching, catchWindowStart, catchWindow]);
 
   // Game timer
   useEffect(() => {
@@ -422,7 +423,7 @@ export default function GameMapScreen() {
               <View
                 style={[
                   styles.catchBarFill,
-                  { width: `${((10 - catchSecondsLeft) / 10) * 100}%` },
+                  { width: `${((catchWindow - catchSecondsLeft) / catchWindow) * 100}%` },
                 ]}
               />
             </View>

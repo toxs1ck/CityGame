@@ -19,6 +19,7 @@ import {
   DEFAULT_DURATION_S,
   DEFAULT_TASK_COUNT,
   DEFAULT_HEADSTART_S,
+  DEFAULT_CATCH_WINDOW_S,
 } from "../../../constants/game";
 
 export default function SessionSetupScreen() {
@@ -72,6 +73,7 @@ export default function SessionSetupScreen() {
   const taskCount = effectiveSetting("task_count") ?? DEFAULT_TASK_COUNT;
   const startingMode = effectiveSetting("starting_mode") ?? "headstart";
   const headstart = effectiveSetting("headstart_s") ?? DEFAULT_HEADSTART_S;
+  const catchWindow = effectiveSetting("catch_window_s") ?? DEFAULT_CATCH_WINDOW_S;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -136,6 +138,14 @@ export default function SessionSetupScreen() {
         value={taskCount}
         onValueChange={(v) => setSettings((s) => ({ ...s, task_count: v }))}
         minimumTrackTintColor="#F39C12" thumbTintColor="#F39C12"
+      />
+
+      <Text style={styles.label}>Fangfenster: {catchWindow}s</Text>
+      <Slider
+        minimumValue={5} maximumValue={30} step={5}
+        value={catchWindow}
+        onValueChange={(v) => setSettings((s) => ({ ...s, catch_window_s: v }))}
+        minimumTrackTintColor="#E74C3C" thumbTintColor="#E74C3C"
       />
 
       <TouchableOpacity

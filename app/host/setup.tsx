@@ -20,6 +20,7 @@ import {
   DEFAULT_DURATION_S,
   DEFAULT_TASK_COUNT,
   DEFAULT_HEADSTART_S,
+  DEFAULT_CATCH_WINDOW_S,
 } from "../../constants/game";
 
 export default function HostSetupScreen() {
@@ -34,6 +35,7 @@ export default function HostSetupScreen() {
   const [taskCount, setTaskCount] = useState(DEFAULT_TASK_COUNT);
   const [headstart, setHeadstart] = useState(DEFAULT_HEADSTART_S);
   const [startingMode, setStartingMode] = useState<"headstart" | "starting_points">("headstart");
+  const [catchWindow, setCatchWindow] = useState(DEFAULT_CATCH_WINDOW_S);
   const [advanced, setAdvanced] = useState(false);
 
   useEffect(() => {
@@ -68,6 +70,7 @@ export default function HostSetupScreen() {
           task_count: taskCount,
           headstart_s: headstart,
           starting_mode: startingMode,
+          catch_window_s: catchWindow,
         },
       })
       .select()
@@ -140,6 +143,9 @@ export default function HostSetupScreen() {
 
       <Text style={styles.label}>Aufgaben pro Gruppe: {taskCount}</Text>
       <Slider minimumValue={1} maximumValue={10} step={1} value={taskCount} onValueChange={setTaskCount} minimumTrackTintColor="#F39C12" thumbTintColor="#F39C12" />
+
+      <Text style={styles.label}>Fangfenster: {catchWindow}s</Text>
+      <Slider minimumValue={5} maximumValue={30} step={5} value={catchWindow} onValueChange={setCatchWindow} minimumTrackTintColor="#E74C3C" thumbTintColor="#E74C3C" />
 
       <TouchableOpacity
         style={[styles.createButton, !selected && styles.createDisabled]}

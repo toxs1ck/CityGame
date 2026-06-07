@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useGameStore } from "../store/gameStore";
 import { haversineDistance } from "../lib/geo";
-import { CATCH_RADIUS_M } from "../constants/game";
-
-const CATCH_WINDOW_MS = 10_000;
+import { CATCH_RADIUS_M, DEFAULT_CATCH_WINDOW_S } from "../constants/game";
 
 /**
  * Runs on the GM / host device only.
@@ -47,9 +45,11 @@ export function useCatchDetection(active: boolean) {
             CATCH_RADIUS_M
         ) {
           // Still in range — confirm if window elapsed
+          const catchWindowMs =
+            (session.settings.catch_window_s ?? DEFAULT_CATCH_WINDOW_S) * 1000;
           if (
             catchStartRef.current !== null &&
-            Date.now() - catchStartRef.current >= CATCH_WINDOW_MS
+            Date.now() - catchStartRef.current >= catchWindowMs
           ) {
             await supabase
               .from("game_sessions")

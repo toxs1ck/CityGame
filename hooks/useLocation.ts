@@ -3,7 +3,8 @@ import * as Location from "expo-location";
 import { supabase } from "../lib/supabase";
 import { usePlayerStore } from "../store/playerStore";
 import { useGameStore } from "../store/gameStore";
-import { randomOffset } from "../lib/geo";
+import { randomOffset, computeGameAreaScale } from "../lib/geo";
+import type { GeoPolygon } from "../types/game";
 import { DEFAULT_LOCATION_UPDATE_INTERVAL_S } from "../constants/game";
 
 export function useLocationTracking(active: boolean) {
@@ -25,7 +26,13 @@ export function useLocationTracking(active: boolean) {
       );
 
       if (hasRadarJam) {
-        const jammed = randomOffset({ lat, lng }, 50);
+        const radarJamAbility = activeAbilities.find(
+          (a) => a.ability?.type === "radar_jam" && (!a.expires_at || new Date(a.expires_at) > new Date())
+        );
+        const baseOffset = (radarJamAbility?.ability?.effect_config?.offset_m as number | undefined) ?? 50;
+        const gameArea = session ? ((session as any).scenario?.game_area as GeoPolygon | null) : null;
+        const areaScale = gameArea ? computeGameAreaScale(gameArea) : 1.0;
+        const jammed = randomOffset({ lat, lng }, baseOffset * areaScale);
         finalLat = jammed.lat;
         finalLng = jammed.lng;
       }
