@@ -20,6 +20,7 @@ import {
   DEFAULT_TASK_COUNT,
   DEFAULT_HEADSTART_S,
   DEFAULT_CATCH_WINDOW_S,
+  DEFAULT_CATCH_RADIUS_M,
 } from "../../../constants/game";
 
 export default function SessionSetupScreen() {
@@ -140,14 +141,6 @@ export default function SessionSetupScreen() {
         minimumTrackTintColor="#F39C12" thumbTintColor="#F39C12"
       />
 
-      <Text style={styles.label}>Fangfenster: {catchWindow}s</Text>
-      <Slider
-        minimumValue={5} maximumValue={30} step={5}
-        value={catchWindow}
-        onValueChange={(v) => setSettings((s) => ({ ...s, catch_window_s: v }))}
-        minimumTrackTintColor="#E74C3C" thumbTintColor="#E74C3C"
-      />
-
       <TouchableOpacity
         style={styles.advancedToggle}
         onPress={() => setAdvanced((a) => !a)}
@@ -166,7 +159,22 @@ export default function SessionSetupScreen() {
             onValueChange={(v) => setSettings((s) => ({ ...s, poi_radius_m: v }))}
             minimumTrackTintColor="#1ABC9C" thumbTintColor="#1ABC9C"
           />
-          <Text style={styles.advancedNote}>Weitere Einstellungen folgen in einer späteren Version.</Text>
+
+          <Text style={styles.label}>Fangfenster: {catchWindow}s</Text>
+          <Slider
+            minimumValue={5} maximumValue={30} step={5}
+            value={catchWindow}
+            onValueChange={(v) => setSettings((s) => ({ ...s, catch_window_s: v }))}
+            minimumTrackTintColor="#E74C3C" thumbTintColor="#E74C3C"
+          />
+
+          <Text style={styles.label}>Fangradius (m): {effectiveSetting("catch_radius_m") ?? DEFAULT_CATCH_RADIUS_M}</Text>
+          <Slider
+            minimumValue={10} maximumValue={100} step={5}
+            value={effectiveSetting("catch_radius_m") ?? DEFAULT_CATCH_RADIUS_M}
+            onValueChange={(v) => setSettings((s) => ({ ...s, catch_radius_m: v }))}
+            minimumTrackTintColor="#E74C3C" thumbTintColor="#E74C3C"
+          />
         </View>
       )}
 

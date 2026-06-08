@@ -51,6 +51,7 @@ export interface ScenarioSettings {
   poi_radius_m: number;
   location_update_interval_s: number;
   catch_window_s: number;
+  catch_radius_m: number;
 }
 
 export interface Scenario {

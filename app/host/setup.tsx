@@ -21,6 +21,7 @@ import {
   DEFAULT_TASK_COUNT,
   DEFAULT_HEADSTART_S,
   DEFAULT_CATCH_WINDOW_S,
+  DEFAULT_CATCH_RADIUS_M,
 } from "../../constants/game";
 
 export default function HostSetupScreen() {
@@ -36,6 +37,7 @@ export default function HostSetupScreen() {
   const [headstart, setHeadstart] = useState(DEFAULT_HEADSTART_S);
   const [startingMode, setStartingMode] = useState<"headstart" | "starting_points">("headstart");
   const [catchWindow, setCatchWindow] = useState(DEFAULT_CATCH_WINDOW_S);
+  const [catchRadius, setCatchRadius] = useState(DEFAULT_CATCH_RADIUS_M);
   const [advanced, setAdvanced] = useState(false);
 
   useEffect(() => {
@@ -71,6 +73,7 @@ export default function HostSetupScreen() {
           headstart_s: headstart,
           starting_mode: startingMode,
           catch_window_s: catchWindow,
+          catch_radius_m: catchRadius,
         },
       })
       .select()
@@ -144,8 +147,24 @@ export default function HostSetupScreen() {
       <Text style={styles.label}>Aufgaben pro Gruppe: {taskCount}</Text>
       <Slider minimumValue={1} maximumValue={10} step={1} value={taskCount} onValueChange={setTaskCount} minimumTrackTintColor="#F39C12" thumbTintColor="#F39C12" />
 
-      <Text style={styles.label}>Fangfenster: {catchWindow}s</Text>
-      <Slider minimumValue={5} maximumValue={30} step={5} value={catchWindow} onValueChange={setCatchWindow} minimumTrackTintColor="#E74C3C" thumbTintColor="#E74C3C" />
+      <TouchableOpacity
+        style={styles.advancedToggle}
+        onPress={() => setAdvanced((a) => !a)}
+      >
+        <Text style={styles.advancedText}>
+          {advanced ? "▲ Erweiterte Einstellungen verbergen" : "▼ Erweiterte Einstellungen"}
+        </Text>
+      </TouchableOpacity>
+
+      {advanced && (
+        <View style={styles.advancedSection}>
+          <Text style={styles.label}>Fangfenster: {catchWindow}s</Text>
+          <Slider minimumValue={5} maximumValue={30} step={5} value={catchWindow} onValueChange={setCatchWindow} minimumTrackTintColor="#E74C3C" thumbTintColor="#E74C3C" />
+
+          <Text style={styles.label}>Fangradius (m): {catchRadius}</Text>
+          <Slider minimumValue={10} maximumValue={100} step={5} value={catchRadius} onValueChange={setCatchRadius} minimumTrackTintColor="#E74C3C" thumbTintColor="#E74C3C" />
+        </View>
+      )}
 
       <TouchableOpacity
         style={[styles.createButton, !selected && styles.createDisabled]}
@@ -182,6 +201,9 @@ const styles = StyleSheet.create({
   modeBtnActive: { backgroundColor: "#3498DB" },
   modeBtnText: { color: "#fff", fontWeight: "600" },
   empty: { color: "#8888aa", textAlign: "center", marginTop: 32, marginBottom: 16 },
+  advancedToggle: { marginTop: 16, padding: 12, alignItems: "center" },
+  advancedText: { color: "#3498DB", fontSize: 14 },
+  advancedSection: { backgroundColor: "#1a1a3e", borderRadius: 16, padding: 16, marginTop: 8 },
   createButton: { backgroundColor: "#2ECC71", borderRadius: 16, padding: 18, alignItems: "center", marginTop: 32 },
   createDisabled: { backgroundColor: "#1a3a1a" },
   createText: { color: "#fff", fontSize: 18, fontWeight: "800" },

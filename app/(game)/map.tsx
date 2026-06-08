@@ -392,13 +392,14 @@ export default function GameMapScreen() {
 
   const nearbyTasks = useNearbyTasks(myPos?.lat ?? null, myPos?.lng ?? null);
 
+  const catchRadiusM = session?.settings.catch_radius_m ?? CATCH_RADIUS_M;
   const canAttemptCatch =
     !isFugitive &&
     headstartLeft === 0 &&
     myPos !== null &&
     lastFugitiveReveal !== null &&
     haversineDistance(myPos, { lat: lastFugitiveReveal.lat, lng: lastFugitiveReveal.lng }) <=
-      CATCH_RADIUS_M * 3;
+      catchRadiusM * 3;
 
   // Filter visible groups (stealth hides seekers from fugitive)
   const visibleGroups = isPunished

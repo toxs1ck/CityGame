@@ -2,16 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useGameStore } from "../store/gameStore";
 import { haversineDistance } from "../lib/geo";
-import { CATCH_RADIUS_M, DEFAULT_CATCH_WINDOW_S } from "../constants/game";
+import { DEFAULT_CATCH_RADIUS_M, DEFAULT_CATCH_WINDOW_S } from "../constants/game";
 
 /**
  * Runs on the GM / host device only.
- * Polls every 5 s for a seeker within CATCH_RADIUS_M of the fugitive.
- * When found, opens a 10-second catch window broadcast to the seeker's device.
+ * Polls every 5 s for a seeker within the configured catch radius of the fugitive.
+ * When found, opens a catch window broadcast to the seeker's device.
  * If the seeker stays in range for the full window, the game ends automatically.
  */
 export function useCatchDetection(active: boolean) {
   const { session, groups, latestLocations } = useGameStore();
+  const catchRadiusM = session?.settings.catch_radius_m ?? DEFAULT_catchRadiusM;
   const catchStartRef = useRef<number | null>(null);
   const catchSeekerRef = useRef<string | null>(null);
   const [catchInProgress, setCatchInProgress] = useState(false);
@@ -42,7 +43,7 @@ export function useCatchDetection(active: boolean) {
         if (
           trackedLoc &&
           haversineDistance(fugPos, { lat: trackedLoc.lat, lng: trackedLoc.lng }) <=
-            CATCH_RADIUS_M
+            catchRadiusM
         ) {
           // Still in range — confirm if window elapsed
           const catchWindowMs =
@@ -94,7 +95,7 @@ export function useCatchDetection(active: boolean) {
         const loc = latestLocations.get(seeker.id);
         if (!loc) continue;
         if (
-          haversineDistance(fugPos, { lat: loc.lat, lng: loc.lng }) <= CATCH_RADIUS_M
+          haversineDistance(fugPos, { lat: loc.lat, lng: loc.lng }) <= catchRadiusM
         ) {
           catchStartRef.current = Date.now();
           catchSeekerRef.current = seeker.id;

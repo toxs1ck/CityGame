@@ -10,6 +10,7 @@ import type {
   Task,
 } from "../types/game";
 import {
+  DEFAULT_CATCH_RADIUS_M,
   DEFAULT_CATCH_WINDOW_S,
   DEFAULT_DURATION_S,
   DEFAULT_HEADSTART_S,
@@ -40,6 +41,10 @@ export function resolveSettings(
       overrides.catch_window_s ??
       defaults.catch_window_s ??
       DEFAULT_CATCH_WINDOW_S,
+    catch_radius_m:
+      overrides.catch_radius_m ??
+      defaults.catch_radius_m ??
+      DEFAULT_CATCH_RADIUS_M,
   };
 }
 
