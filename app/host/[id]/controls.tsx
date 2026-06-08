@@ -19,6 +19,7 @@ import { useAllGroupLocations } from "../../../hooks/useGroupLocations";
 import { useFugitiveRevealBroadcast } from "../../../hooks/useRevealInterval";
 import { assignTasksToGroups, assignStartingPoints } from "../../../lib/gameLogic";
 import { useCatchDetection } from "../../../hooks/useCatchDetection";
+import { JoinQRModal } from "../../../components/game/JoinQRModal";
 import type { GameSession, Group, Task, POI, StartingPoint } from "../../../types/game";
 
 export default function HostControlsScreen() {
@@ -30,6 +31,7 @@ export default function HostControlsScreen() {
   const [startingPoints, setStartingPoints] = useState<StartingPoint[]>([]);
   const [spPickerGroup, setSpPickerGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
+  const [qrVisible, setQrVisible] = useState(false);
 
   useAllGroupLocations(sessionId);
   useFugitiveRevealBroadcast(localSession?.status === "active");
@@ -184,9 +186,13 @@ export default function HostControlsScreen() {
       </MapView>
 
       <View style={styles.panel}>
+        <JoinQRModal joinCode={localSession?.join_code} visible={qrVisible} onClose={() => setQrVisible(false)} />
         <View style={styles.codeRow}>
           <Text style={styles.codeLabel}>CODE</Text>
-          <Text style={styles.code}>{localSession?.join_code}</Text>
+          <TouchableOpacity onPress={() => setQrVisible(true)} style={styles.qrBtn}>
+            <Text style={styles.code}>{localSession?.join_code}</Text>
+            <Text style={styles.qrIcon}>⬛</Text>
+          </TouchableOpacity>
           {catchInProgress ? (
             <View style={styles.catchBadge}>
               <Text style={styles.catchBadgeText}>⏱ {catchSeekerName} fängt…</Text>
@@ -316,7 +322,9 @@ const styles = StyleSheet.create({
   },
   codeRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
   codeLabel: { color: "#8888aa", fontSize: 11, letterSpacing: 2 },
+  qrBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   code: { color: "#fff", fontWeight: "900", fontSize: 20, letterSpacing: 4 },
+  qrIcon: { fontSize: 18, opacity: 0.6 },
   status: { marginLeft: "auto", color: "#F39C12", fontWeight: "600" },
   statusActive: { color: "#2ECC71" },
   catchBadge: {

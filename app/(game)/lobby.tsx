@@ -12,12 +12,14 @@ import { supabase } from "../../lib/supabase";
 import { useGameStore } from "../../store/gameStore";
 import { usePlayerStore } from "../../store/playerStore";
 import { useGameSessionSubscription } from "../../hooks/useGameSession";
+import { JoinQRModal } from "../../components/game/JoinQRModal";
 import type { Group } from "../../types/game";
 
 export default function LobbyScreen() {
   const { session, setSession, setGroups } = useGameStore();
   const { myGroup, setMyGroup } = usePlayerStore();
   const [groups, setLocalGroups] = useState<Group[]>([]);
+  const [qrVisible, setQrVisible] = useState(false);
 
   useGameSessionSubscription(session?.id ?? null);
 
@@ -89,12 +91,14 @@ export default function LobbyScreen() {
 
   return (
     <View style={styles.container}>
+      <JoinQRModal joinCode={session.join_code} visible={qrVisible} onClose={() => setQrVisible(false)} />
       <View style={styles.header}>
         <Text style={styles.title}>Lobby</Text>
-        <View style={styles.codeBox}>
+        <TouchableOpacity style={styles.codeBox} onPress={() => setQrVisible(true)}>
           <Text style={styles.codeLabel}>JOIN-CODE</Text>
           <Text style={styles.code}>{session.join_code}</Text>
-        </View>
+          <Text style={styles.qrHint}>⬛ QR</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.waiting}>Warte auf den Game Master…</Text>
@@ -128,6 +132,7 @@ const styles = StyleSheet.create({
   codeBox: { alignItems: "center", backgroundColor: "#1a1a3e", borderRadius: 16, padding: 14 },
   codeLabel: { color: "#8888aa", fontSize: 10, letterSpacing: 2 },
   code: { color: "#fff", fontSize: 24, fontWeight: "900", letterSpacing: 4 },
+  qrHint: { color: "#3498DB", fontSize: 11, marginTop: 4 },
   waiting: { color: "#8888aa", textAlign: "center", marginBottom: 24 },
   sectionTitle: { color: "#8888aa", fontSize: 12, letterSpacing: 2, textTransform: "uppercase", paddingHorizontal: 24, marginBottom: 12 },
   list: { paddingHorizontal: 16, paddingBottom: 40 },

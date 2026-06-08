@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { usePlayerStore } from "../../store/playerStore";
@@ -21,9 +23,31 @@ export default function JoinScreen() {
   const [code, setCode] = useState("");
   const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const scannedRef = useRef(false);
 
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const { deviceId, setMyGroup } = usePlayerStore();
   const { setSession, setPois } = useGameStore();
+
+  async function openScanner() {
+    if (!cameraPermission?.granted) {
+      const { granted } = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert("Kamera", "Kamerazugriff wird benötigt, um den QR-Code zu scannen.");
+        return;
+      }
+    }
+    scannedRef.current = false;
+    setScannerVisible(true);
+  }
+
+  function handleBarcodeScan({ data }: { data: string }) {
+    if (scannedRef.current) return;
+    scannedRef.current = true;
+    setScannerVisible(false);
+    setCode(data.trim().toUpperCase().slice(0, 6));
+  }
 
   async function join() {
     const trimmedCode = code.trim().toUpperCase();
@@ -116,6 +140,24 @@ export default function JoinScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      {/* QR scanner modal */}
+      <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
+        <View style={styles.scannerContainer}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+            onBarcodeScanned={handleBarcodeScan}
+          />
+          <View style={styles.scannerOverlay}>
+            <Text style={styles.scannerHint}>QR-Code ins Bild halten</Text>
+            <TouchableOpacity style={styles.scannerClose} onPress={() => setScannerVisible(false)}>
+              <Text style={styles.scannerCloseText}>Abbrechen</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Text style={styles.title}>Spiel beitreten</Text>
 
       <Text style={styles.label}>JOIN-CODE</Text>
@@ -128,6 +170,9 @@ export default function JoinScreen() {
         maxLength={6}
         autoCapitalize="characters"
       />
+      <TouchableOpacity style={styles.qrButton} onPress={openScanner}>
+        <Text style={styles.qrButtonText}>⬛ QR-Code scannen</Text>
+      </TouchableOpacity>
 
       <Text style={styles.label}>GRUPPENNAME</Text>
       <TextInput
@@ -177,6 +222,34 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 28,
   },
+  qrButton: {
+    borderRadius: 12,
+    padding: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#3498DB",
+    marginBottom: 28,
+  },
+  qrButtonText: { color: "#3498DB", fontSize: 15, fontWeight: "600" },
+  scannerContainer: { flex: 1, backgroundColor: "#000" },
+  camera: { flex: 1 },
+  scannerOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 32,
+    alignItems: "center",
+    gap: 16,
+  },
+  scannerHint: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  scannerClose: {
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 14,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+  },
+  scannerCloseText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   button: {
     backgroundColor: "#3498DB",
     borderRadius: 16,
