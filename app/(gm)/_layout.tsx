@@ -14,6 +14,7 @@ export default function GMLayout() {
       <Stack.Screen name="scenarios/new" options={{ title: "Neues Szenario" }} />
       <Stack.Screen name="scenarios/[id]/index" options={{ title: "Szenario bearbeiten" }} />
       <Stack.Screen name="scenarios/[id]/pois" options={{ title: "POIs verwalten" }} />
+      <Stack.Screen name="scenarios/[id]/boundary" options={{ title: "Spielfeldbegrenzung" }} />
       <Stack.Screen name="scenarios/[id]/tasks" options={{ title: "Aufgaben verwalten" }} />
       <Stack.Screen name="session/setup" options={{ title: "Spiel konfigurieren" }} />
       <Stack.Screen name="session/[id]/monitor" options={{ title: "Live-Überwachung", headerShown: false }} />

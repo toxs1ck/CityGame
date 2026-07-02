@@ -138,6 +138,14 @@ export default function ScenarioDetailScreen() {
 
       <TouchableOpacity
         style={styles.navCard}
+        onPress={() => router.push(`/(gm)/scenarios/${id}/boundary`)}
+      >
+        <Text style={styles.navCardTitle}>🗺️ Spielfeldbegrenzung</Text>
+        <Text style={styles.navCardSub}>Polygon auf der Karte einzeichnen</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.navCard}
         onPress={() => router.push(`/(gm)/scenarios/${id}/pois`)}
       >
         <Text style={styles.navCardTitle}>📍 POIs verwalten</Text>
@@ -196,4 +204,5 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   navCardTitle: { fontSize: 16, fontWeight: "700", color: "#fff" },
+  navCardSub: { color: "#8888aa", fontSize: 13, marginTop: 4 },
 });
