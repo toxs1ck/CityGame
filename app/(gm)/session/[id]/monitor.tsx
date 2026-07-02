@@ -11,6 +11,7 @@ import {
   FlatList,
 } from "react-native";
 import MapView, { Marker, Polygon } from "react-native-maps";
+import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../../../lib/supabase";
 import { useGameStore } from "../../../../store/gameStore";
@@ -29,6 +30,9 @@ export default function MonitorScreen() {
   const [startingPoints, setStartingPoints] = useState<StartingPoint[]>([]);
   const [spPickerGroup, setSpPickerGroup] = useState<Group | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
+  const [mapRegion, setMapRegion] = useState<{
+    latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number;
+  } | undefined>(undefined);
 
   useAllGroupLocations(sessionId);
   useFugitiveRevealBroadcast(localSession?.status === "active");
@@ -61,6 +65,31 @@ export default function MonitorScreen() {
       if (groupData) { setLocalGroups(groupData as Group[]); setGroups(groupData as Group[]); }
       if (poiData) setPois(poiData as POI[]);
       if (spData) setStartingPoints(spData as StartingPoint[]);
+
+      // Center on game area if available, otherwise on user location
+      const gameArea = (s as any).scenario?.game_area as GeoPolygon | null;
+      if (gameArea) {
+        const coords = gameArea.coordinates[0];
+        const lats = coords.map(([, lat]) => lat);
+        const lngs = coords.map(([lng]) => lng);
+        setMapRegion({
+          latitude: (Math.max(...lats) + Math.min(...lats)) / 2,
+          longitude: (Math.max(...lngs) + Math.min(...lngs)) / 2,
+          latitudeDelta: Math.max(Math.max(...lats) - Math.min(...lats), 0.005) * 1.4,
+          longitudeDelta: Math.max(Math.max(...lngs) - Math.min(...lngs), 0.005) * 1.4,
+        });
+      } else {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          setMapRegion({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          });
+        }
+      }
     }
   }
 
@@ -190,7 +219,7 @@ export default function MonitorScreen() {
 
   return (
     <View style={styles.container}>
-      <MapView style={styles.map} showsUserLocation>
+      <MapView style={styles.map} showsUserLocation initialRegion={mapRegion}>
         {gameArea && (
           <Polygon
             coordinates={gameArea.coordinates[0].map(([lng, lat]) => ({ latitude: lat, longitude: lng }))}

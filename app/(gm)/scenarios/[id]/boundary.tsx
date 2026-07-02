@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
+import * as Location from "expo-location";
 import { useLocalSearchParams } from "expo-router";
 import { supabase } from "../../../../lib/supabase";
 import type { GeoPolygon } from "../../../../types/game";
@@ -49,6 +50,18 @@ export default function BoundaryScreen() {
         .map(([lng, lat]) => ({ lat, lng }));
       setVertices(verts);
       centerOnVertices(verts);
+    } else {
+      // No boundary yet — center on user's current location
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setInitialRegion({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        });
+      }
     }
   }
 
@@ -114,12 +127,7 @@ export default function BoundaryScreen() {
         ref={mapRef}
         style={styles.map}
         customMapStyle={MAP_STYLE}
-        initialRegion={initialRegion ?? {
-          latitude: 48.1374,
-          longitude: 11.5755,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
+        initialRegion={initialRegion}
         showsUserLocation
         showsMyLocationButton
         onPress={handleMapPress}

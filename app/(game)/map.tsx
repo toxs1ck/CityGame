@@ -112,8 +112,11 @@ export default function GameMapScreen() {
   // Watch own position for map centering and nearby tasks
   useEffect(() => {
     let sub: Location.LocationSubscription;
-    Location.requestForegroundPermissionsAsync().then(({ status }) => {
+    Location.requestForegroundPermissionsAsync().then(async ({ status }) => {
       if (status !== "granted") return;
+      // Get an immediate fix so initialRegion is populated on first render
+      const quick = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setMyPos({ lat: quick.coords.latitude, lng: quick.coords.longitude });
       Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: 3000 },
         (loc) =>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import MapView, { Marker, MapPressEvent } from "react-native-maps";
+import * as Location from "expo-location";
 import { useLocalSearchParams } from "expo-router";
 import { supabase } from "../../../../lib/supabase";
 import type { POI, StartingPoint } from "../../../../types/game";
@@ -27,10 +28,38 @@ export default function POIsScreen() {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [saving, setSaving] = useState(false);
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     fetchAll();
   }, [scenarioId]);
+
+  async function centerMap(poisData: POI[], spData: StartingPoint[]) {
+    const all = [
+      ...poisData.map((p) => ({ lat: p.lat, lng: p.lng })),
+      ...spData.map((s) => ({ lat: s.lat, lng: s.lng })),
+    ];
+    if (all.length > 0) {
+      const lats = all.map((p) => p.lat);
+      const lngs = all.map((p) => p.lng);
+      mapRef.current?.animateToRegion({
+        latitude: (Math.max(...lats) + Math.min(...lats)) / 2,
+        longitude: (Math.max(...lngs) + Math.min(...lngs)) / 2,
+        latitudeDelta: Math.max(Math.max(...lats) - Math.min(...lats), 0.005) * 1.4,
+        longitudeDelta: Math.max(Math.max(...lngs) - Math.min(...lngs), 0.005) * 1.4,
+      }, 500);
+    } else {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      mapRef.current?.animateToRegion({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      }, 500);
+    }
+  }
 
   async function fetchAll() {
     setLoading(true);
@@ -38,9 +67,12 @@ export default function POIsScreen() {
       supabase.from("pois").select("*").eq("scenario_id", scenarioId),
       supabase.from("starting_points").select("*").eq("scenario_id", scenarioId),
     ]);
-    if (p) setPois(p as POI[]);
-    if (s) setStartingPoints(s as StartingPoint[]);
+    const poisData = (p as POI[]) ?? [];
+    const spData = (s as StartingPoint[]) ?? [];
+    setPois(poisData);
+    setStartingPoints(spData);
     setLoading(false);
+    centerMap(poisData, spData);
   }
 
   function onMapPress(e: MapPressEvent) {
@@ -120,6 +152,7 @@ export default function POIsScreen() {
       <Text style={styles.hint}>Tippe auf die Karte, um einen neuen Punkt hinzuzufügen</Text>
 
       <MapView
+        ref={mapRef}
         style={styles.map}
         onPress={onMapPress}
         showsUserLocation
