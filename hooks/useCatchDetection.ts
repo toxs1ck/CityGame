@@ -12,7 +12,7 @@ import { DEFAULT_CATCH_RADIUS_M, DEFAULT_CATCH_WINDOW_S } from "../constants/gam
  */
 export function useCatchDetection(active: boolean) {
   const { session, groups, latestLocations } = useGameStore();
-  const catchRadiusM = session?.settings.catch_radius_m ?? DEFAULT_catchRadiusM;
+  const catchRadiusM = session?.settings.catch_radius_m ?? DEFAULT_CATCH_RADIUS_M;
   const catchStartRef = useRef<number | null>(null);
   const catchSeekerRef = useRef<string | null>(null);
   const [catchInProgress, setCatchInProgress] = useState(false);
