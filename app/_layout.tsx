@@ -5,7 +5,10 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import * as Crypto from "expo-crypto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SplashScreen from "expo-splash-screen";
 import { usePlayerStore } from "../store/playerStore";
+
+SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +31,7 @@ export default function RootLayout() {
         await AsyncStorage.setItem(DEVICE_ID_KEY, id);
         setDeviceId(id);
       }
+      await SplashScreen.hideAsync();
     })();
   }, []);
 
