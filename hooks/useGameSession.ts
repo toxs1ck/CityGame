@@ -25,6 +25,8 @@ export function useGameSessionSubscription(sessionId: string | null) {
           setSession(s);
           if (s.status === "finished") {
             router.replace("/(game)/game-over");
+          } else if (s.status === "aborted") {
+            router.replace("/");
           }
         }
       )

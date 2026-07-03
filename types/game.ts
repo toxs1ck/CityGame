@@ -1,5 +1,5 @@
 export type SessionMode = "managed" | "host";
-export type SessionStatus = "lobby" | "active" | "finished";
+export type SessionStatus = "lobby" | "active" | "finished" | "aborted";
 export type GroupRole = "fugitive" | "seeker" | "unassigned";
 export type TaskType = "multiple_choice" | "photo" | "text_answer";
 export type TaskStatus = "active" | "completed" | "skipped";
