@@ -11,7 +11,7 @@ import {
   FlatList,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { useGameStore } from "../../../store/gameStore";
 import { usePlayerStore } from "../../../store/playerStore";
@@ -25,7 +25,7 @@ import type { GameSession, Group, Task, POI, StartingPoint } from "../../../type
 export default function HostControlsScreen() {
   const { id: sessionId } = useLocalSearchParams<{ id: string }>();
   const { session, setSession, groups, setGroups, latestLocations, setPois } = useGameStore();
-  const { deviceId } = usePlayerStore();
+  const { deviceId, myGroup, setMyGroup } = usePlayerStore();
   const [localSession, setLocalSession] = useState<GameSession | null>(null);
   const [localGroups, setLocalGroups] = useState<Group[]>([]);
   const [startingPoints, setStartingPoints] = useState<StartingPoint[]>([]);
@@ -161,6 +161,11 @@ export default function HostControlsScreen() {
     }
 
     await supabase.from("game_sessions").update({ status: "active", started_at: new Date().toISOString() }).eq("id", sessionId);
+
+    // Sync the host's own group with the freshest role before navigating
+    const myUpdatedGroup = currentGroups.find((g) => g.device_id === deviceId);
+    if (myUpdatedGroup) setMyGroup(myUpdatedGroup);
+    router.replace("/(game)/abilities");
   }
 
   async function endGame() {
