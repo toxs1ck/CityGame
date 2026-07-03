@@ -7,6 +7,13 @@ export type CompletionStatus = "pending" | "approved" | "rejected";
 export type AbilityTier = "normal" | "ultimate";
 export type StartingMode = "headstart" | "starting_points";
 
+export interface Profile {
+  id: string;
+  username: string | null;
+  is_gm: boolean;
+  created_at: string;
+}
+
 export type AbilityType =
   // Seeker normal
   | "compass"

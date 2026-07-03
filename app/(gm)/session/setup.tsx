@@ -12,6 +12,7 @@ import {
 import { router } from "expo-router";
 import Slider from "@react-native-community/slider";
 import { supabase } from "../../../lib/supabase";
+import { usePlayerStore } from "../../../store/playerStore";
 import { generateJoinCode } from "../../../lib/gameLogic";
 import type { Scenario, ScenarioSettings } from "../../../types/game";
 import {
@@ -24,6 +25,7 @@ import {
 } from "../../../constants/game";
 
 export default function SessionSetupScreen() {
+  const { user } = usePlayerStore();
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [selected, setSelected] = useState<Scenario | null>(null);
   const [settings, setSettings] = useState<Partial<ScenarioSettings>>({});
@@ -48,14 +50,13 @@ export default function SessionSetupScreen() {
     if (!selected) { Alert.alert("Fehler", "Bitte ein Szenario auswählen."); return; }
     setLoading(true);
 
-    const { data: user } = await supabase.auth.getUser();
     const joinCode = generateJoinCode();
 
     const { data, error } = await supabase
       .from("game_sessions")
       .insert({
         scenario_id: selected.id,
-        gm_id: user.user?.id,
+        gm_id: user?.id,
         mode: "managed",
         status: "lobby",
         join_code: joinCode,

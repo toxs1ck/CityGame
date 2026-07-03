@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
+import { usePlayerStore } from "../../../store/playerStore";
 import {
   DEFAULT_REVEAL_INTERVAL_S,
   DEFAULT_DURATION_S,
@@ -21,6 +22,7 @@ import {
 } from "../../../constants/game";
 
 export default function NewScenarioScreen() {
+  const { user } = usePlayerStore();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,11 +33,10 @@ export default function NewScenarioScreen() {
       return;
     }
     setLoading(true);
-    const { data: user } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("scenarios")
       .insert({
-        created_by: user.user?.id,
+        created_by: user?.id,
         name: name.trim(),
         description: description.trim(),
         default_settings: {

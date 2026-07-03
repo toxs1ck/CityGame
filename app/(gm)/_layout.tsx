@@ -1,6 +1,35 @@
-import { Stack } from "expo-router";
+import { View, ActivityIndicator } from "react-native";
+import { Redirect, Stack } from "expo-router";
+import { usePlayerStore } from "../../store/playerStore";
 
 export default function GMLayout() {
+  const { user, profile, authLoaded } = usePlayerStore();
+
+  if (!authLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#0f0f23", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator color="#9B59B6" size="large" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <Redirect href="/auth/login?from=gm" />;
+  }
+
+  // User exists but profile not yet fetched — wait briefly
+  if (profile === null) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#0f0f23", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator color="#9B59B6" size="large" />
+      </View>
+    );
+  }
+
+  if (!profile.is_gm) {
+    return <Redirect href="/" />;
+  }
+
   return (
     <Stack
       screenOptions={{
