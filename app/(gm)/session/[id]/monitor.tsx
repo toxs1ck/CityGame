@@ -140,14 +140,29 @@ export default function MonitorScreen() {
   }
 
   async function startGame() {
-    const fugitiveGroup = localGroups.find((g) => g.role === "fugitive");
-    if (!fugitiveGroup) {
-      Alert.alert("Fehler", "Weise zuerst einer Gruppe die Flüchtig-Rolle zu.");
-      return;
-    }
     if (localGroups.length < 2) {
       Alert.alert("Fehler", "Mindestens 2 Gruppen werden benötigt.");
       return;
+    }
+
+    const autoFugitive = localSession?.settings?.auto_fugitive ?? false;
+    let currentGroups = localGroups;
+
+    if (!currentGroups.some((g) => g.role === "fugitive")) {
+      if (!autoFugitive) {
+        Alert.alert("Fehler", "Weise zuerst einer Gruppe die Flüchtig-Rolle zu, oder aktiviere 'Auto-Flüchtiger' in den Einstellungen.");
+        return;
+      }
+      // Pick a random group as fugitive; all others become seekers
+      const chosen = currentGroups[Math.floor(Math.random() * currentGroups.length)];
+      await supabase.from("groups").update({ role: "seeker" }).eq("session_id", sessionId).neq("id", chosen.id);
+      await supabase.from("groups").update({ role: "fugitive" }).eq("id", chosen.id);
+      const { data: fresh } = await supabase.from("groups").select("*").eq("session_id", sessionId).order("joined_at");
+      if (fresh) {
+        currentGroups = fresh as Group[];
+        setLocalGroups(currentGroups);
+        setGroups(currentGroups);
+      }
     }
 
     const isStartingPointsMode =
@@ -155,7 +170,7 @@ export default function MonitorScreen() {
 
     // Auto-assign any unassigned groups if in starting_points mode
     if (isStartingPointsMode && startingPoints.length > 0) {
-      const unassigned = localGroups.filter((g) => !g.starting_point_id);
+      const unassigned = currentGroups.filter((g) => !g.starting_point_id);
       if (unassigned.length > 0) {
         const assignments = assignStartingPoints(unassigned, startingPoints);
         const updates = Array.from(assignments.entries()).map(([gId, spId]) =>
@@ -175,7 +190,7 @@ export default function MonitorScreen() {
 
     if (tasks && tasks.length > 0) {
       const taskCount = localSession?.settings?.task_count ?? 5;
-      const assignments = assignTasksToGroups(localGroups, tasks as Task[], taskCount);
+      const assignments = assignTasksToGroups(currentGroups, tasks as Task[], taskCount);
       const rows = [];
       for (const [groupId, taskIds] of assignments.entries()) {
         for (const taskId of taskIds) {

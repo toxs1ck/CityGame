@@ -142,6 +142,19 @@ export default function SessionSetupScreen() {
         minimumTrackTintColor="#F39C12" thumbTintColor="#F39C12"
       />
 
+      <View style={styles.ruleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.ruleLabel}>Auto-Flüchtiger</Text>
+          <Text style={styles.ruleSub}>Zufällige Gruppe wird beim Start als Flüchtig gewählt</Text>
+        </View>
+        <Switch
+          value={settings.auto_fugitive ?? false}
+          onValueChange={(v) => setSettings((s) => ({ ...s, auto_fugitive: v }))}
+          trackColor={{ true: "#E74C3C", false: "#333" }}
+          thumbColor="#fff"
+        />
+      </View>
+
       <TouchableOpacity
         style={styles.advancedToggle}
         onPress={() => setAdvanced((a) => !a)}
@@ -213,6 +226,9 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   toggleLabel: { color: "#8888aa", fontSize: 15 },
   toggleActive: { color: "#fff", fontWeight: "700" },
+  ruleRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 20, backgroundColor: "#1a1a3e", borderRadius: 14, padding: 16 },
+  ruleLabel: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  ruleSub: { color: "#8888aa", fontSize: 12, marginTop: 2 },
   advancedToggle: { marginTop: 16, padding: 12, alignItems: "center" },
   advancedText: { color: "#3498DB", fontSize: 14 },
   advancedSection: {

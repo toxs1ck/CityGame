@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,73 +11,117 @@ import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useGameStore } from "../../store/gameStore";
 import { usePlayerStore } from "../../store/playerStore";
-import { useGameSessionSubscription } from "../../hooks/useGameSession";
 import { JoinQRModal } from "../../components/game/JoinQRModal";
-import type { Group } from "../../types/game";
+import type { GameSession, Group } from "../../types/game";
 
 export default function LobbyScreen() {
   const { session, setSession, setGroups } = useGameStore();
   const { myGroup, setMyGroup } = usePlayerStore();
   const [groups, setLocalGroups] = useState<Group[]>([]);
   const [qrVisible, setQrVisible] = useState(false);
+  const navigatingRef = useRef(false);
 
-  useGameSessionSubscription(session?.id ?? null);
-
+  // ── Group list: initial fetch + polling every 3 s ────────────────────────
+  // Polling ensures the list updates even when Supabase Realtime is not
+  // enabled for the `groups` table in the project settings.
   useEffect(() => {
-    if (!session) return;
-    fetchGroups();
+    if (!session?.id) return;
 
+    let cancelled = false;
+
+    async function fetchGroups() {
+      if (cancelled) return;
+      const { data } = await supabase
+        .from("groups")
+        .select("*")
+        .eq("session_id", session!.id)
+        .order("joined_at");
+      if (data && !cancelled) {
+        setLocalGroups(data as Group[]);
+        setGroups(data as Group[]);
+      }
+    }
+
+    fetchGroups();
+    const id = setInterval(fetchGroups, 3000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [session?.id]);
+
+  // ── Real-time bonus: postgres_changes for group list (fast when enabled) ─
+  useEffect(() => {
+    if (!session?.id) return;
     const channel = supabase
       .channel(`lobby:${session.id}:groups`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "groups", filter: `session_id=eq.${session.id}` },
-        () => fetchGroups()
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "groups", filter: `session_id=eq.${session.id}` },
+        async () => {
+          const { data } = await supabase.from("groups").select("*").eq("session_id", session!.id).order("joined_at");
+          if (data) { setLocalGroups(data as Group[]); setGroups(data as Group[]); }
+        })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [session?.id]);
 
+  // ── Session status: poll every 2 s + navigate when active ────────────────
   useEffect(() => {
-    // When session transitions to active, move to ability selection or map
-    if (session?.status === "active") {
-      if (myGroup?.role !== "unassigned") {
-        router.replace("/(game)/abilities");
-      }
-    }
-  }, [session?.status, myGroup?.role]);
+    if (!session?.id || session.status === "active") return;
 
-  // Keep myGroup in sync with DB updates (role assignments)
+    let cancelled = false;
+
+    const id = setInterval(async () => {
+      if (cancelled || navigatingRef.current) return;
+
+      const { data: sessionData } = await supabase
+        .from("game_sessions")
+        .select("*")
+        .eq("id", session.id)
+        .single();
+      if (!sessionData || cancelled) return;
+
+      if (sessionData.status === "finished") {
+        clearInterval(id);
+        router.replace("/(game)/game-over");
+        return;
+      }
+
+      if (sessionData.status === "active") {
+        clearInterval(id);
+        setSession(sessionData as GameSession);
+        await navigateAfterStart(sessionData as GameSession);
+      }
+    }, 2000);
+
+    return () => { cancelled = true; clearInterval(id); };
+  }, [session?.id, session?.status]);
+
+  // ── Real-time bonus: postgres_changes for session status ─────────────────
   useEffect(() => {
-    if (!myGroup || !session) return;
+    if (!session?.id) return;
     const channel = supabase
-      .channel(`group:${myGroup.id}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "groups", filter: `id=eq.${myGroup.id}` },
-        (payload) => {
-          const updated = payload.new as Group;
-          setMyGroup(updated);
-          if (updated.role !== "unassigned" && session.status === "active") {
-            router.replace("/(game)/abilities");
-          }
-        }
-      )
+      .channel(`lobby:${session.id}:session`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "game_sessions", filter: `id=eq.${session.id}` },
+        async (payload) => {
+          const s = payload.new as GameSession;
+          setSession(s);
+          if (s.status === "finished") { router.replace("/(game)/game-over"); return; }
+          if (s.status === "active") { await navigateAfterStart(s); }
+        })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [myGroup?.id, session?.id]);
+  }, [session?.id]);
 
-  async function fetchGroups() {
-    if (!session) return;
-    const { data } = await supabase
-      .from("groups")
-      .select("*")
-      .eq("session_id", session.id)
-      .order("joined_at");
+  async function navigateAfterStart(activeSession: GameSession) {
+    if (navigatingRef.current) return;
+    navigatingRef.current = true;
+
+    if (!myGroup?.id) { router.replace("/(game)/map"); return; }
+
+    // Re-fetch group to get the freshest role (Realtime may not have updated it)
+    const { data } = await supabase.from("groups").select("*").eq("id", myGroup.id).single();
     if (data) {
-      setLocalGroups(data as Group[]);
-      setGroups(data as Group[]);
+      setMyGroup(data as Group);
+      router.replace(data.role !== "unassigned" ? "/(game)/abilities" : "/(game)/map");
+    } else {
+      router.replace("/(game)/map");
     }
   }
 

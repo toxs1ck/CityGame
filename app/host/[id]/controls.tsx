@@ -100,15 +100,36 @@ export default function HostControlsScreen() {
   }
 
   async function startGame() {
-    const hasFugitive = localGroups.some((g) => g.role === "fugitive");
-    if (!hasFugitive) { Alert.alert("Fehler", "Weise zuerst einer Gruppe die Flüchtig-Rolle zu."); return; }
+    if (localGroups.length < 2) {
+      Alert.alert("Fehler", "Mindestens 2 Gruppen werden benötigt.");
+      return;
+    }
+
+    const autoFugitive = localSession?.settings?.auto_fugitive ?? false;
+    let currentGroups = localGroups;
+
+    if (!currentGroups.some((g) => g.role === "fugitive")) {
+      if (!autoFugitive) {
+        Alert.alert("Fehler", "Weise zuerst einer Gruppe die Flüchtig-Rolle zu, oder aktiviere 'Auto-Flüchtiger' in den Einstellungen.");
+        return;
+      }
+      const chosen = currentGroups[Math.floor(Math.random() * currentGroups.length)];
+      await supabase.from("groups").update({ role: "seeker" }).eq("session_id", sessionId).neq("id", chosen.id);
+      await supabase.from("groups").update({ role: "fugitive" }).eq("id", chosen.id);
+      const { data: fresh } = await supabase.from("groups").select("*").eq("session_id", sessionId).order("joined_at");
+      if (fresh) {
+        currentGroups = fresh as Group[];
+        setLocalGroups(currentGroups);
+        setGroups(currentGroups);
+      }
+    }
 
     const isStartingPointsMode =
       (localSession?.settings?.starting_mode ?? (localSession as any)?.scenario?.default_settings?.starting_mode) === "starting_points";
 
     // Auto-assign any unassigned groups if in starting_points mode
     if (isStartingPointsMode && startingPoints.length > 0) {
-      const unassigned = localGroups.filter((g) => !g.starting_point_id);
+      const unassigned = currentGroups.filter((g) => !g.starting_point_id);
       if (unassigned.length > 0) {
         const assignments = assignStartingPoints(unassigned, startingPoints);
         await Promise.all(
@@ -129,7 +150,7 @@ export default function HostControlsScreen() {
 
     if (tasks && tasks.length > 0) {
       const taskCount = localSession?.settings?.task_count ?? 5;
-      const assignments = assignTasksToGroups(localGroups, tasks as Task[], taskCount);
+      const assignments = assignTasksToGroups(currentGroups, tasks as Task[], taskCount);
       const rows = [];
       for (const [gId, taskIds] of assignments.entries()) {
         for (const tId of taskIds) {

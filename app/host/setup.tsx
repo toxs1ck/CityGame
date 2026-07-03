@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Switch,
   StyleSheet,
   FlatList,
   Alert,
@@ -43,6 +44,7 @@ export default function HostSetupScreen() {
   const [startingMode, setStartingMode] = useState<"headstart" | "starting_points">("headstart");
   const [catchWindow, setCatchWindow] = useState(DEFAULT_CATCH_WINDOW_S);
   const [catchRadius, setCatchRadius] = useState(DEFAULT_CATCH_RADIUS_M);
+  const [autoFugitive, setAutoFugitive] = useState(false);
   const [advanced, setAdvanced] = useState(false);
 
   useEffect(() => {
@@ -80,6 +82,7 @@ export default function HostSetupScreen() {
           starting_mode: startingMode,
           catch_window_s: catchWindow,
           catch_radius_m: catchRadius,
+          auto_fugitive: autoFugitive,
         },
       })
       .select("*, scenario:scenarios(*)")
@@ -199,6 +202,19 @@ export default function HostSetupScreen() {
       <Text style={styles.label}>Aufgaben pro Gruppe: {taskCount}</Text>
       <Slider minimumValue={1} maximumValue={10} step={1} value={taskCount} onValueChange={setTaskCount} minimumTrackTintColor="#F39C12" thumbTintColor="#F39C12" />
 
+      <View style={styles.ruleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.ruleLabel}>Auto-Flüchtiger</Text>
+          <Text style={styles.ruleSub}>Zufällige Gruppe wird beim Start als Flüchtig gewählt</Text>
+        </View>
+        <Switch
+          value={autoFugitive}
+          onValueChange={setAutoFugitive}
+          trackColor={{ true: "#E74C3C", false: "#333" }}
+          thumbColor="#fff"
+        />
+      </View>
+
       <TouchableOpacity
         style={styles.advancedToggle}
         onPress={() => setAdvanced((a) => !a)}
@@ -261,6 +277,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   empty: { color: "#8888aa", textAlign: "center", marginTop: 32, marginBottom: 16 },
+  ruleRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 16, backgroundColor: "#1a1a3e", borderRadius: 14, padding: 16 },
+  ruleLabel: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  ruleSub: { color: "#8888aa", fontSize: 12, marginTop: 2 },
   advancedToggle: { marginTop: 16, padding: 12, alignItems: "center" },
   advancedText: { color: "#3498DB", fontSize: 14 },
   advancedSection: { backgroundColor: "#1a1a3e", borderRadius: 16, padding: 16, marginTop: 8 },
