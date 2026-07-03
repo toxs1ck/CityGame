@@ -312,13 +312,13 @@ export default function HostControlsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0f0f23" },
   center: { flex: 1, backgroundColor: "#0f0f23", justifyContent: "center", alignItems: "center" },
-  map: { flex: 1 },
+  map: { height: "33%" },
   panel: {
+    flex: 1,
     backgroundColor: "#1a1a2e",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 16,
-    maxHeight: "45%",
   },
   codeRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
   codeLabel: { color: "#8888aa", fontSize: 11, letterSpacing: 2 },

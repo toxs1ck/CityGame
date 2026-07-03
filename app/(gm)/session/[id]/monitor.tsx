@@ -379,13 +379,13 @@ export default function MonitorScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0f0f23" },
-  map: { flex: 1 },
+  map: { height: "33%" },
   panel: {
+    flex: 1,
     backgroundColor: "#1a1a2e",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 16,
-    maxHeight: "48%",
   },
   codeRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   label: { color: "#8888aa", fontSize: 11, letterSpacing: 2 },
