@@ -10,6 +10,7 @@ import {
   Modal,
   FlatList,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker } from "react-native-maps";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../../lib/supabase";
@@ -211,7 +212,7 @@ export default function HostControlsScreen() {
         })}
       </MapView>
 
-      <View style={styles.panel}>
+      <SafeAreaView edges={["bottom"]} style={styles.panel}>
         <JoinQRModal joinCode={localSession?.join_code} visible={qrVisible} onClose={() => setQrVisible(false)} />
         <View style={styles.codeRow}>
           <Text style={styles.codeLabel}>CODE</Text>
@@ -285,7 +286,7 @@ export default function HostControlsScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </SafeAreaView>
 
       {/* Starting point picker modal */}
       <Modal visible={!!spPickerGroup} transparent animationType="slide">

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useGameStore } from "../../store/gameStore";
@@ -248,7 +249,7 @@ export default function AbilitySelectionScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Info modal */}
       {infoAbility && (
         <InfoModal ability={infoAbility} onClose={() => setInfoAbility(null)} />
@@ -337,7 +338,7 @@ export default function AbilitySelectionScreen() {
             : <Text style={styles.confirmText}>Auswahl bestätigen →</Text>}
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

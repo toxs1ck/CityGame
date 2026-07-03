@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Switch,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Slider from "@react-native-community/slider";
 import { supabase } from "../../../lib/supabase";
@@ -78,6 +79,7 @@ export default function SessionSetupScreen() {
   const catchWindow = effectiveSetting("catch_window_s") ?? DEFAULT_CATCH_WINDOW_S;
 
   return (
+    <SafeAreaView style={styles.safeArea}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.sectionTitle}>Szenario auswählen</Text>
       {scenarios.map((s) => (
@@ -204,10 +206,12 @@ export default function SessionSetupScreen() {
         )}
       </TouchableOpacity>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#0f0f23" },
   container: { flex: 1, backgroundColor: "#0f0f23" },
   content: { padding: 24, paddingBottom: 48 },
   sectionTitle: { fontSize: 18, fontWeight: "700", color: "#fff", marginTop: 8, marginBottom: 12 },

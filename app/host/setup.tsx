@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Slider from "@react-native-community/slider";
 import { supabase } from "../../lib/supabase";
@@ -138,6 +139,7 @@ export default function HostSetupScreen() {
   }
 
   return (
+    <SafeAreaView style={styles.safeArea}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Spiel hosten</Text>
       <Text style={styles.sub}>Teile den Join-Code mit deinen Mitspielern</Text>
@@ -242,10 +244,12 @@ export default function HostSetupScreen() {
         {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createText}>🚀 Spiel erstellen</Text>}
       </TouchableOpacity>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#0f0f23" },
   container: { flex: 1, backgroundColor: "#0f0f23" },
   content: { padding: 24, paddingBottom: 48 },
   center: { flex: 1, backgroundColor: "#0f0f23", justifyContent: "center", alignItems: "center" },

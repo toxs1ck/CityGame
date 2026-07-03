@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -403,6 +404,7 @@ export default function AbilitiesActiveScreen() {
   }
 
   return (
+    <SafeAreaView style={styles.safeArea}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.apBar}>
         <Text style={styles.apLabel}>Aktionspunkte</Text>
@@ -445,10 +447,12 @@ export default function AbilitiesActiveScreen() {
         </>
       )}
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#0f0f23" },
   container: { flex: 1, backgroundColor: "#0f0f23" },
   content: { padding: 16, paddingBottom: 48 },
   oobBanner: {

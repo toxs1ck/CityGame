@@ -6,10 +6,10 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  SafeAreaView,
   Modal,
   FlatList,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker, Polygon } from "react-native-maps";
 import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";

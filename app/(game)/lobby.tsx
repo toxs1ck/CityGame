@@ -7,6 +7,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useGameStore } from "../../store/gameStore";
@@ -134,7 +135,7 @@ export default function LobbyScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <JoinQRModal joinCode={session.join_code} visible={qrVisible} onClose={() => setQrVisible(false)} />
       <View style={styles.header}>
         <Text style={styles.title}>Lobby</Text>
@@ -164,7 +165,7 @@ export default function LobbyScreen() {
           </View>
         )}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -37,8 +37,8 @@ export function isInsidePolygon(point: GeoPoint, polygon: GeoPolygon): boolean {
     const xj = coords[j][0];
     const yj = coords[j][1];
     const intersect =
-      yi > point.lng !== yj > point.lng &&
-      point.lat < ((xj - xi) * (point.lng - yi)) / (yj - yi) + xi;
+      yi > point.lat !== yj > point.lat &&
+      point.lng < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi;
     if (intersect) inside = !inside;
   }
   return inside;

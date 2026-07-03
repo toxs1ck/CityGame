@@ -5,8 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker, Circle, Polygon, Polyline } from "react-native-maps";
 import * as Location from "expo-location";
 import { router } from "expo-router";

@@ -11,6 +11,7 @@ import {
   Platform,
   Modal,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -136,6 +137,7 @@ export default function JoinScreen() {
   }
 
   return (
+    <SafeAreaView style={styles.safeArea}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -192,10 +194,12 @@ export default function JoinScreen() {
         )}
       </TouchableOpacity>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: "#0f0f23" },
   container: {
     flex: 1,
     backgroundColor: "#0f0f23",
