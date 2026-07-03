@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   FlatList,
@@ -13,8 +14,10 @@ import { router } from "expo-router";
 import Slider from "@react-native-community/slider";
 import { supabase } from "../../lib/supabase";
 import { usePlayerStore } from "../../store/playerStore";
+import { useGameStore } from "../../store/gameStore";
 import { generateJoinCode } from "../../lib/gameLogic";
-import type { Scenario } from "../../types/game";
+import type { Scenario, GameSession, POI, Group } from "../../types/game";
+import { GROUP_COLORS } from "../../constants/game";
 import {
   DEFAULT_REVEAL_INTERVAL_S,
   DEFAULT_DURATION_S,
@@ -25,9 +28,11 @@ import {
 } from "../../constants/game";
 
 export default function HostSetupScreen() {
-  const { deviceId } = usePlayerStore();
+  const { deviceId, profile, user, setMyGroup } = usePlayerStore();
+  const { setSession, setPois } = useGameStore();
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [selected, setSelected] = useState<Scenario | null>(null);
+  const [groupName, setGroupName] = useState(profile?.username ?? user?.email?.split("@")[0] ?? "");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -55,10 +60,11 @@ export default function HostSetupScreen() {
   async function createSession() {
     if (!selected) { Alert.alert("Fehler", "Bitte ein Szenario auswählen."); return; }
     if (!deviceId) return;
+    if (!groupName.trim()) { Alert.alert("Fehler", "Bitte einen Gruppenname eingeben."); return; }
 
     setCreating(true);
     const joinCode = generateJoinCode();
-    const { data, error } = await supabase
+    const { data: sessionData, error: sessionError } = await supabase
       .from("game_sessions")
       .insert({
         scenario_id: selected.id,
@@ -76,12 +82,48 @@ export default function HostSetupScreen() {
           catch_radius_m: catchRadius,
         },
       })
+      .select("*, scenario:scenarios(*)")
+      .single();
+
+    if (sessionError) {
+      setCreating(false);
+      Alert.alert("Fehler", sessionError.message);
+      return;
+    }
+
+    // Create a group for the host so they appear in the lobby
+    const { data: groupData, error: groupError } = await supabase
+      .from("groups")
+      .insert({
+        session_id: sessionData.id,
+        name: groupName.trim(),
+        role: "unassigned",
+        action_points: 0,
+        color: GROUP_COLORS[0],
+        device_id: deviceId,
+      })
       .select()
       .single();
 
+    if (groupError) {
+      setCreating(false);
+      Alert.alert("Fehler", groupError.message);
+      return;
+    }
+
+    // Load POIs for the scenario
+    const { data: poiData } = await supabase
+      .from("pois")
+      .select("*")
+      .eq("scenario_id", selected.id);
+
+    // Sync to stores so the host is recognised as a player
+    setSession(sessionData as GameSession);
+    setMyGroup(groupData as Group);
+    if (poiData) setPois(poiData as POI[]);
+
     setCreating(false);
-    if (error) { Alert.alert("Fehler", error.message); return; }
-    router.push(`/host/${data.id}/controls`);
+    router.push(`/host/${sessionData.id}/controls`);
   }
 
   if (loading) {
@@ -95,7 +137,17 @@ export default function HostSetupScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Spiel hosten</Text>
-      <Text style={styles.sub}>Kein Account benötigt – teile den Code mit deinen Freunden</Text>
+      <Text style={styles.sub}>Teile den Join-Code mit deinen Mitspielern</Text>
+
+      <Text style={styles.sectionTitle}>Deine Gruppe</Text>
+      <TextInput
+        style={styles.nameInput}
+        placeholder="Gruppenname"
+        placeholderTextColor="#555"
+        value={groupName}
+        onChangeText={setGroupName}
+        maxLength={30}
+      />
 
       <Text style={styles.sectionTitle}>Szenario wählen</Text>
       {scenarios.length === 0 ? (
@@ -200,6 +252,14 @@ const styles = StyleSheet.create({
   modeBtn: { flex: 1, backgroundColor: "#1a1a3e", borderRadius: 12, padding: 14, alignItems: "center" },
   modeBtnActive: { backgroundColor: "#3498DB" },
   modeBtnText: { color: "#fff", fontWeight: "600" },
+  nameInput: {
+    backgroundColor: "#1a1a3e",
+    borderRadius: 14,
+    padding: 16,
+    color: "#fff",
+    fontSize: 16,
+    marginBottom: 8,
+  },
   empty: { color: "#8888aa", textAlign: "center", marginTop: 32, marginBottom: 16 },
   advancedToggle: { marginTop: 16, padding: 12, alignItems: "center" },
   advancedText: { color: "#3498DB", fontSize: 14 },
