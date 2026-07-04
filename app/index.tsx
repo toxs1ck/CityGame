@@ -113,7 +113,11 @@ export default function LandingScreen() {
     await supabase.from("groups").delete().eq("id", group.id);
     const { data: remaining } = await supabase.from("groups").select("id").eq("session_id", session.id);
     if (!remaining || remaining.length === 0) {
-      await supabase.from("game_sessions").update({ status: "aborted", finished_at: new Date().toISOString() }).eq("id", session.id);
+      if (session.status === "lobby") {
+        await supabase.from("game_sessions").delete().eq("id", session.id);
+      } else {
+        await supabase.from("game_sessions").update({ status: "aborted", finished_at: new Date().toISOString() }).eq("id", session.id);
+      }
     }
     setActiveGame(null);
     setLeaving(false);
