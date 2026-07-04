@@ -870,20 +870,24 @@ export default function GameMapScreen() {
           />
         )}
 
-        {/* POI markers — only visible when tasks drawer is open */}
-        {tasksOpen &&
-          pois
-            .filter((poi) =>
-              myTasks.some((t) => t.task?.poi_id === poi.id && t.status === "active")
-            )
-            .map((poi) => (
-              <Marker
-                key={poi.id}
-                coordinate={{ latitude: poi.lat, longitude: poi.lng }}
-                title={poi.name}
-                pinColor="#F39C12"
-              />
-            ))}
+        {/* POI markers — always visible for active tasks */}
+        {pois
+          .filter((poi) =>
+            myTasks.some((t) => t.task?.poi_id === poi.id && t.status === "active")
+          )
+          .map((poi) => (
+            <Marker
+              key={poi.id}
+              coordinate={{ latitude: poi.lat, longitude: poi.lng }}
+              title={poi.name}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+            >
+              <View style={styles.poiMarker}>
+                <Text style={styles.poiMarkerIcon}>🎯</Text>
+              </View>
+            </Marker>
+          ))}
 
         {/* Other group markers */}
         {visibleGroups.map((g) => {
@@ -898,9 +902,18 @@ export default function GameMapScreen() {
             <Marker
               key={g.id}
               coordinate={{ latitude: loc.lat, longitude: loc.lng }}
-              title={g.name}
-              pinColor={g.color}
-            />
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+            >
+              <View style={styles.groupMarkerWrapper}>
+                <View style={[styles.groupMarkerBubble, { backgroundColor: g.color }]}>
+                  <Text style={styles.groupMarkerIcon}>
+                    {g.role === "fugitive" ? "🏃" : "🔍"}
+                  </Text>
+                </View>
+                <Text style={styles.groupMarkerName} numberOfLines={1}>{g.name}</Text>
+              </View>
+            </Marker>
           );
         })}
 
@@ -1362,6 +1375,45 @@ const styles = StyleSheet.create({
   taskDrawerPoi: { color: "#F39C12", fontSize: 12, fontWeight: "800", marginBottom: 3 },
   taskDrawerTitle: { color: "#ddd", fontSize: 11, lineHeight: 15 },
   taskDrawerDist: { color: "#8888aa", fontSize: 10, marginTop: 4, fontWeight: "600" },
+
+  // ── Custom map markers ────────────────────────────────────────────────────────
+  poiMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E67E22",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2.5,
+    borderColor: "#fff",
+  },
+  poiMarkerIcon: { fontSize: 18 },
+  groupMarkerWrapper: {
+    alignItems: "center",
+    gap: 3,
+  },
+  groupMarkerBubble: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2.5,
+    borderColor: "#fff",
+  },
+  groupMarkerIcon: { fontSize: 20 },
+  groupMarkerName: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    maxWidth: 72,
+    textAlign: "center",
+    overflow: "hidden",
+  },
 
   // ── Bottom panel ─────────────────────────────────────────────────────────────
   bottomPanel: {
