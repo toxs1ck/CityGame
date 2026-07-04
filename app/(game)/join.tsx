@@ -4,6 +4,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
+  Keyboard,
   StyleSheet,
   Alert,
   ActivityIndicator,
@@ -156,6 +158,8 @@ export default function JoinScreen() {
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.inner}>
         {/* QR scanner modal */}
         <Modal
           visible={scannerVisible}
@@ -225,6 +229,8 @@ export default function JoinScreen() {
             <Text style={styles.buttonText}>Beitreten →</Text>
           )}
         </TouchableOpacity>
+          </View>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </View>
   );
@@ -238,6 +244,7 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: "center",
   },
+  inner: { flex: 1 },
   title: { fontSize: 28, fontWeight: "800", color: "#fff", marginBottom: 40 },
   label: { color: "#8888aa", fontSize: 12, letterSpacing: 2, marginBottom: 10 },
   codeInput: {
