@@ -696,7 +696,8 @@ export default function GameMapScreen() {
           );
           return !isStealth;
         }
-        return g.role === "fugitive";
+        // Seekers see other seekers (real-time). Fugitive shown via dedicated ping marker.
+        return g.role === "seeker";
       });
 
   const gameArea = session
@@ -889,14 +890,36 @@ export default function GameMapScreen() {
             </Marker>
           ))}
 
-        {/* Other group markers */}
+        {/* Fugitive ping marker — seekers only, shows last known position + age */}
+        {!isFugitive && lastFugitiveReveal && (() => {
+          const ageSecs = Math.round(
+            (Date.now() - new Date(lastFugitiveReveal.recorded_at).getTime()) / 1000
+          );
+          const ageLabel =
+            ageSecs < 60
+              ? `vor ${ageSecs}s`
+              : `vor ${Math.floor(ageSecs / 60)}m ${ageSecs % 60}s`;
+          const fugGroup = groups.find((g) => g.role === "fugitive");
+          return (
+            <Marker
+              key="fugitive-ping"
+              coordinate={{ latitude: lastFugitiveReveal.lat, longitude: lastFugitiveReveal.lng }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges
+            >
+              <View style={styles.groupMarkerWrapper}>
+                <View style={[styles.groupMarkerBubble, styles.pingMarkerBubble, { backgroundColor: fugGroup?.color ?? "#E74C3C" }]}>
+                  <Text style={styles.groupMarkerIcon}>🏃</Text>
+                </View>
+                <Text style={styles.pingMarkerTime}>{ageLabel}</Text>
+              </View>
+            </Marker>
+          );
+        })()}
+
+        {/* Other group markers (seekers see teammates; fugitive sees seekers) */}
         {visibleGroups.map((g) => {
-          const loc =
-            isFugitive
-              ? latestLocations.get(g.id)
-              : g.role === "fugitive"
-              ? lastFugitiveReveal
-              : latestLocations.get(g.id);
+          const loc = latestLocations.get(g.id);
           if (!loc) return null;
           return (
             <Marker
@@ -907,9 +930,7 @@ export default function GameMapScreen() {
             >
               <View style={styles.groupMarkerWrapper}>
                 <View style={[styles.groupMarkerBubble, { backgroundColor: g.color }]}>
-                  <Text style={styles.groupMarkerIcon}>
-                    {g.role === "fugitive" ? "🏃" : "🔍"}
-                  </Text>
+                  <Text style={styles.groupMarkerIcon}>🔍</Text>
                 </View>
                 <Text style={styles.groupMarkerName} numberOfLines={1}>{g.name}</Text>
               </View>
@@ -1411,6 +1432,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
     maxWidth: 72,
+    textAlign: "center",
+    overflow: "hidden",
+  },
+  pingMarkerBubble: {
+    opacity: 0.85,
+    borderStyle: "dashed",
+  },
+  pingMarkerTime: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+    backgroundColor: "rgba(231,76,60,0.85)",
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    maxWidth: 80,
     textAlign: "center",
     overflow: "hidden",
   },
