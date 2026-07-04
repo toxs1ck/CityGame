@@ -11,7 +11,7 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
@@ -39,6 +39,7 @@ function parseOAuthRedirect(url: string): { access_token?: string; refresh_token
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function LandingScreen() {
+  const insets = useSafeAreaInsets();
   const { user, profile, authLoaded, deviceId, setMyGroup } = usePlayerStore();
   const { setSession, setPois } = useGameStore();
 
@@ -222,9 +223,9 @@ export default function LandingScreen() {
   // ── Loading ─────────────────────────────────────────────────────────────────
   if (!authLoaded || checkingGame) {
     return (
-      <SafeAreaView style={[styles.container, styles.center]}>
+      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
         <ActivityIndicator color="#3498DB" size="large" />
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -234,7 +235,7 @@ export default function LandingScreen() {
     const scenarioName = (activeGame.session as any).scenario?.name ?? "Spiel";
     const statusLabel = activeGame.session.status === "active" ? "🟢 Aktiv" : "🟡 Lobby";
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.hero}>
           <Text style={styles.bigTitle}>CityGame</Text>
           <Text style={styles.heroSub}>Das Stadtdetektiv-Spiel</Text>
@@ -264,14 +265,14 @@ export default function LandingScreen() {
             </View>
           )}
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // ── Home screen (logged-in) ─────────────────────────────────────────────────
   if (user) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.hero}>
           <Text style={styles.bigTitle}>CityGame</Text>
           <Text style={styles.heroSub}>Das Stadtdetektiv-Spiel</Text>
@@ -299,13 +300,13 @@ export default function LandingScreen() {
             <TouchableOpacity onPress={logout}><Text style={styles.logoutText}>Abmelden</Text></TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // ── Auth screen (not logged in) ─────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
           {/* Logo */}
@@ -472,12 +473,12 @@ export default function LandingScreen() {
       </KeyboardAvoidingView>
 
       {/* Guest button — pinned to bottom */}
-      <View style={styles.guestBar}>
+      <View style={[styles.guestBar, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity style={styles.guestBtn} onPress={() => router.push("/(game)/join")}>
           <Text style={styles.guestBtnText}>Als Gast spielen →</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

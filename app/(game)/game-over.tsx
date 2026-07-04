@@ -6,8 +6,8 @@ import {
   StyleSheet,
   FlatList,
   ActivityIndicator,
-  SafeAreaView,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useGameStore } from "../../store/gameStore";
@@ -20,6 +20,7 @@ interface GroupResult {
 }
 
 export default function GameOverScreen() {
+  const insets = useSafeAreaInsets();
   const { session, groups, reset: resetGame } = useGameStore();
   const { myGroup, reset: resetPlayer } = usePlayerStore();
   const [results, setResults] = useState<GroupResult[]>([]);
@@ -78,7 +79,7 @@ export default function GameOverScreen() {
     | undefined;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Text style={styles.trophy}>{catchInfo ? "🎯" : "🏆"}</Text>
       <Text style={styles.title}>
         {catchInfo ? "Flüchtig gefangen!" : "Spiel beendet!"}
@@ -146,7 +147,7 @@ export default function GameOverScreen() {
       <TouchableOpacity style={styles.homeButton} onPress={goHome}>
         <Text style={styles.homeButtonText}>🏠 Zurück zur Startseite</Text>
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 }
 

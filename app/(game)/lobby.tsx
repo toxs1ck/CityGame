@@ -7,7 +7,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useGameStore } from "../../store/gameStore";
@@ -16,6 +16,7 @@ import { JoinQRModal } from "../../components/game/JoinQRModal";
 import type { GameSession, Group } from "../../types/game";
 
 export default function LobbyScreen() {
+  const insets = useSafeAreaInsets();
   const { session, setSession, setGroups } = useGameStore();
   const { myGroup, setMyGroup } = usePlayerStore();
   const [groups, setLocalGroups] = useState<Group[]>([]);
@@ -135,7 +136,7 @@ export default function LobbyScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <JoinQRModal joinCode={session.join_code} visible={qrVisible} onClose={() => setQrVisible(false)} />
       <View style={styles.header}>
         <Text style={styles.title}>Lobby</Text>
@@ -165,7 +166,7 @@ export default function LobbyScreen() {
           </View>
         )}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

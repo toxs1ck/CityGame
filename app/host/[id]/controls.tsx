@@ -10,7 +10,7 @@ import {
   Modal,
   FlatList,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker } from "react-native-maps";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../../lib/supabase";
@@ -24,6 +24,7 @@ import { JoinQRModal } from "../../../components/game/JoinQRModal";
 import type { GameSession, Group, Task, POI, StartingPoint } from "../../../types/game";
 
 export default function HostControlsScreen() {
+  const insets = useSafeAreaInsets();
   const { id: sessionId } = useLocalSearchParams<{ id: string }>();
   const { session, setSession, groups, setGroups, latestLocations, setPois } = useGameStore();
   const { deviceId, myGroup, setMyGroup } = usePlayerStore();
@@ -212,7 +213,7 @@ export default function HostControlsScreen() {
         })}
       </MapView>
 
-      <SafeAreaView edges={["bottom"]} style={styles.panel}>
+      <View style={[styles.panel, { paddingBottom: insets.bottom }]}>
         <JoinQRModal joinCode={localSession?.join_code} visible={qrVisible} onClose={() => setQrVisible(false)} />
         <View style={styles.codeRow}>
           <Text style={styles.codeLabel}>CODE</Text>
@@ -286,7 +287,7 @@ export default function HostControlsScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* Starting point picker modal */}
       <Modal visible={!!spPickerGroup} transparent animationType="slide">

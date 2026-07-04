@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { useGameStore } from "../../store/gameStore";
@@ -141,6 +141,7 @@ function AbilityCard({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function AbilitySelectionScreen() {
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { session } = useGameStore();
   const { myGroup, setMyAbilities } = usePlayerStore();
@@ -249,7 +250,7 @@ export default function AbilitySelectionScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {/* Info modal */}
       {infoAbility && (
         <InfoModal ability={infoAbility} onClose={() => setInfoAbility(null)} />
@@ -338,7 +339,7 @@ export default function AbilitySelectionScreen() {
             : <Text style={styles.confirmText}>Auswahl bestätigen →</Text>}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Slider from "@react-native-community/slider";
 import { supabase } from "../../lib/supabase";
@@ -30,6 +30,7 @@ import {
 } from "../../constants/game";
 
 export default function HostSetupScreen() {
+  const insets = useSafeAreaInsets();
   const { deviceId, profile, user, setMyGroup } = usePlayerStore();
   const { setSession, setPois } = useGameStore();
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -139,7 +140,7 @@ export default function HostSetupScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Spiel hosten</Text>
       <Text style={styles.sub}>Teile den Join-Code mit deinen Mitspielern</Text>
@@ -244,7 +245,7 @@ export default function HostSetupScreen() {
         {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createText}>🚀 Spiel erstellen</Text>}
       </TouchableOpacity>
     </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

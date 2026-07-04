@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -56,6 +56,7 @@ async function getCurrentPos(): Promise<{ lat: number; lng: number } | null> {
 }
 
 export default function AbilitiesActiveScreen() {
+  const insets = useSafeAreaInsets();
   const { myAbilities, myGroup, updateAbilityLastUsed, isOobPunished, isFrozen, isTrapped } = usePlayerStore();
   const { session, pois, groups, latestLocations } = useGameStore();
   const [activating, setActivating] = useState<string | null>(null);
@@ -404,7 +405,7 @@ export default function AbilitiesActiveScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.apBar}>
         <Text style={styles.apLabel}>Aktionspunkte</Text>
@@ -447,7 +448,7 @@ export default function AbilitiesActiveScreen() {
         </>
       )}
     </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

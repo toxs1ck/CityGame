@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Circle, Polygon, Polyline } from "react-native-maps";
 import * as Location from "expo-location";
 import { router } from "expo-router";
@@ -77,6 +77,7 @@ export default function GameMapScreen() {
 
   const FREEZE_HOLD_RADIUS_M = 25;
 
+  const insets = useSafeAreaInsets();
   const isFugitive = myGroup?.role === "fugitive";
   const isGMOrHost = session ? canControl(session, deviceId!, null) : false;
   const catchWindow = session?.settings.catch_window_s ?? DEFAULT_CATCH_WINDOW_S;
@@ -631,7 +632,7 @@ export default function GameMapScreen() {
       </MapView>
 
       {/* Top HUD */}
-      <SafeAreaView style={styles.topHUD} pointerEvents="box-none">
+      <View style={[styles.topHUD, { paddingTop: insets.top + 12 }]} pointerEvents="box-none">
         <View style={styles.hudRow}>
           <View style={styles.roleBadge}>
             <Text style={styles.roleBadgeText}>
@@ -684,10 +685,10 @@ export default function GameMapScreen() {
             </Text>
           </View>
         )}
-      </SafeAreaView>
+      </View>
 
       {/* Bottom panel */}
-      <SafeAreaView style={styles.bottomPanel} pointerEvents="box-none">
+      <View style={[styles.bottomPanel, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
         {/* Caught in a trap */}
         {isTrapped && (
           <View style={styles.trapOverlay}>
@@ -802,7 +803,7 @@ export default function GameMapScreen() {
             <Text style={styles.bottomBtnLabel}>Aufgaben</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }

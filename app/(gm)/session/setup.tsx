@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Switch,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Slider from "@react-native-community/slider";
 import { supabase } from "../../../lib/supabase";
@@ -26,6 +26,7 @@ import {
 } from "../../../constants/game";
 
 export default function SessionSetupScreen() {
+  const insets = useSafeAreaInsets();
   const { user } = usePlayerStore();
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [selected, setSelected] = useState<Scenario | null>(null);
@@ -79,7 +80,7 @@ export default function SessionSetupScreen() {
   const catchWindow = effectiveSetting("catch_window_s") ?? DEFAULT_CATCH_WINDOW_S;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.sectionTitle}>Szenario auswählen</Text>
       {scenarios.map((s) => (
@@ -206,7 +207,7 @@ export default function SessionSetupScreen() {
         )}
       </TouchableOpacity>
     </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

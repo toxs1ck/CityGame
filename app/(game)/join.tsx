@@ -11,7 +11,7 @@ import {
   Platform,
   Modal,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -21,6 +21,7 @@ import { GROUP_COLORS } from "../../constants/game";
 import type { GameSession, Group, POI } from "../../types/game";
 
 export default function JoinScreen() {
+  const insets = useSafeAreaInsets();
   const [code, setCode] = useState("");
   const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -137,7 +138,7 @@ export default function JoinScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -194,7 +195,7 @@ export default function JoinScreen() {
         )}
       </TouchableOpacity>
     </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
