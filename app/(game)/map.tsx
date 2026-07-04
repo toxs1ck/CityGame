@@ -34,6 +34,26 @@ import {
 } from "../../constants/game";
 import type { AbilityObject, GeoPoint, GeoPolygon, GroupLocation } from "../../types/game";
 
+const DARK_MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
+  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#8a8a9a" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#12121e" }] },
+  { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#2a2a4a" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#c0c0d0" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c4c" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1a1a3a" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#7070a0" }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#373757" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3c3c6c" }] },
+  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#505080" }] },
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0a0a1a" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#2a2a4a" }] },
+  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#16162a" }] },
+];
+
 export default function GameMapScreen() {
   const {
     session,
@@ -589,6 +609,7 @@ export default function GameMapScreen() {
       <MapView
         ref={mapRef}
         style={styles.map}
+        customMapStyle={DARK_MAP_STYLE}
         showsUserLocation
         showsMyLocationButton={false}
         initialRegion={
