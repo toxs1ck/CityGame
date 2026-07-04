@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Circle, Polygon, Polyline } from "react-native-maps";
@@ -25,15 +26,26 @@ import { useAbilityObjectsSubscription } from "../../hooks/useAbilityObjectsSubs
 import { useAllActiveAbilitiesSubscription } from "../../hooks/useAllActiveAbilitiesSubscription";
 import { useAbilityEffects } from "../../hooks/useAbilityEffects";
 import { supabase } from "../../lib/supabase";
-import { canControl, formatDuration } from "../../lib/gameLogic";
-import { haversineDistance, isInsidePolygon } from "../../lib/geo";
+import { canControl, formatDuration, isCooldownReady, cooldownRemainingSeconds } from "../../lib/gameLogic";
+import { haversineDistance, isInsidePolygon, bearingDegrees, compassDirection, formatDistance, computeGameAreaScale } from "../../lib/geo";
 import {
   DEFAULT_REVEAL_INTERVAL_S,
   DEFAULT_HEADSTART_S,
   CATCH_RADIUS_M,
   DEFAULT_CATCH_WINDOW_S,
 } from "../../constants/game";
-import type { AbilityObject, GeoPoint, GeoPolygon, GroupLocation } from "../../types/game";
+import type { AbilityObject, GeoPoint, GeoPolygon, GroupLocation, GroupAbility, AbilityDefinition } from "../../types/game";
+
+const INSTANT_ABILITIES = new Set(["compass", "distance_reveal", "poi_proximity_reveal", "exact_location"]);
+const PLACEMENT_ABILITIES = new Set(["exclusion_zone", "motion_detector", "trap", "roadblock"]);
+const MAP_PLACEMENT_ABILITIES = new Set(["drone_view"]);
+
+async function getCurrentPos(): Promise<{ lat: number; lng: number } | null> {
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== "granted") return null;
+  const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+  return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+}
 
 const DARK_MAP_STYLE = [
   { elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
@@ -72,9 +84,11 @@ export default function GameMapScreen() {
     myTasks,
     myAbilities,
     setOobPunished,
+    isOobPunished,
     isFrozen,
     setFrozen,
     isTrapped,
+    updateAbilityLastUsed,
     reset: resetPlayer,
   } = usePlayerStore();
 
@@ -99,6 +113,9 @@ export default function GameMapScreen() {
   const leftFreezeZoneAtRef = useRef<number | null>(null);
   const myPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<MapView>(null);
+
+  const [activating, setActivating] = useState<string | null>(null);
+  const [, forceUpdate] = useState(0);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<"abilities" | "tasks" | null>(null);
@@ -427,6 +444,174 @@ export default function GameMapScreen() {
     const t = setInterval(update, 1000);
     return () => clearInterval(t);
   }, [lastFugitiveReveal?.recorded_at, isFugitive]);
+
+  // Re-render every second while abilities drawer is open so cooldown timers update
+  useEffect(() => {
+    if (!abilitiesOpen) return;
+    const t = setInterval(() => forceUpdate((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [abilitiesOpen]);
+
+  // ── Ability activation helpers ───────────────────────────────────────────────
+
+  async function recordUsage(def: AbilityDefinition, ability: GroupAbility) {
+    if (!myGroup || !session) return;
+    const expiresAt = def.duration_seconds
+      ? new Date(Date.now() + def.duration_seconds * 1000).toISOString()
+      : null;
+    await supabase.from("active_abilities").insert({
+      group_id: myGroup.id,
+      session_id: session.id,
+      ability_id: def.id,
+      expires_at: expiresAt,
+    });
+    if (def.tier === "ultimate") {
+      await supabase.from("groups")
+        .update({ action_points: myGroup.action_points - (def.ap_cost ?? 0) })
+        .eq("id", myGroup.id);
+    }
+    await supabase.from("group_abilities")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", ability.id);
+    updateAbilityLastUsed(def.id);
+  }
+
+  async function activateInstant(def: AbilityDefinition, ga: GroupAbility) {
+    const pos = await getCurrentPos();
+    if (!pos) { Alert.alert("Fehler", "GPS-Position nicht verfügbar."); return; }
+    const fugitiveGroup = groups.find((g) => g.role === "fugitive");
+    if (!fugitiveGroup) { Alert.alert("Fehler", "Kein Flüchtiger gefunden."); return; }
+    const { data: fugLoc } = await supabase
+      .from("group_locations").select("lat, lng, recorded_at")
+      .eq("group_id", fugitiveGroup.id).order("recorded_at", { ascending: false }).limit(1).single();
+    if (!fugLoc) { Alert.alert("Kein Signal", "Noch kein Standort des Flüchtigen verfügbar."); return; }
+    const fugPos = { lat: fugLoc.lat, lng: fugLoc.lng };
+    const age = Math.round((Date.now() - new Date(fugLoc.recorded_at).getTime()) / 1000);
+    const ageLabel = age < 60 ? `vor ${age}s` : `vor ${Math.round(age / 60)} min`;
+    if (def.type === "compass") {
+      const bearing = bearingDegrees(pos, fugPos);
+      Alert.alert("🧭 Kompass", `Richtung: ${compassDirection(bearing)} (${Math.round(bearing)}°)\n\nStandort aktualisiert ${ageLabel}.`);
+    }
+    if (def.type === "distance_reveal") {
+      Alert.alert("📏 Distanz", `Entfernung: ${formatDistance(haversineDistance(pos, fugPos))}\n\nStandort aktualisiert ${ageLabel}.`);
+    }
+    if (def.type === "poi_proximity_reveal") {
+      if (pois.length === 0) { Alert.alert("Keine POIs", "Keine Standorte vorhanden."); return; }
+      let closest = pois[0];
+      let closestDist = haversineDistance(fugPos, { lat: pois[0].lat, lng: pois[0].lng });
+      for (const poi of pois.slice(1)) {
+        const d = haversineDistance(fugPos, { lat: poi.lat, lng: poi.lng });
+        if (d < closestDist) { closestDist = d; closest = poi; }
+      }
+      Alert.alert("📍 POI-Nähe", `Flüchtiger ist nahe: ${closest.name}\n(${formatDistance(closestDist)})\n\nStandort aktualisiert ${ageLabel}.`);
+    }
+    if (def.type === "exact_location") {
+      const bearing = bearingDegrees(pos, fugPos);
+      Alert.alert("🎯 Exakter Standort", `Richtung: ${compassDirection(bearing)} (${Math.round(bearing)}°)\nEntfernung: ${formatDistance(haversineDistance(pos, fugPos))}\n\nStandort aktualisiert ${ageLabel}.`);
+    }
+    await recordUsage(def, ga);
+  }
+
+  async function activatePlacement(def: AbilityDefinition, ga: GroupAbility) {
+    const pos = await getCurrentPos();
+    if (!pos) { Alert.alert("Fehler", "GPS-Position nicht verfügbar."); return; }
+    const expiresAt = def.duration_seconds
+      ? new Date(Date.now() + def.duration_seconds * 1000).toISOString()
+      : null;
+    const area = session ? ((session as any).scenario?.game_area as GeoPolygon | null) : null;
+    const areaScale = area ? computeGameAreaScale(area) : 1.0;
+    const radiusM = Math.round(
+      ((def.effect_config?.radius_m as number | undefined) ?? (def.type === "motion_detector" ? 50 : 100)) * areaScale
+    );
+    const { error } = await supabase.from("ability_objects").insert({
+      session_id: session!.id,
+      placed_by_group_id: myGroup!.id,
+      type: def.type,
+      geometry: { lat: pos.lat, lng: pos.lng },
+      expires_at: expiresAt,
+      metadata: { radius_m: radiusM, ...(def.type === "trap" ? { duration_s: (def.effect_config?.duration_s as number) ?? 300 } : {}) },
+    });
+    if (error) { Alert.alert("Fehler", error.message); return; }
+    await recordUsage(def, ga);
+    const label =
+      def.type === "exclusion_zone" ? `Sperrzone platziert (${radiusM} m Radius)` :
+      def.type === "trap" ? "Falle platziert an deinem Standort" :
+      def.type === "roadblock" ? "Straßensperre errichtet" :
+      `${def.name} platziert (${radiusM} m)`;
+    Alert.alert("Platziert!", label);
+  }
+
+  async function activateFreeze(def: AbilityDefinition, ga: GroupAbility) {
+    if (!myGroup || !session) return;
+    const pos = await getCurrentPos();
+    if (!pos) { Alert.alert("Fehler", "GPS-Position nicht verfügbar."); return; }
+    const seekerGroups = groups.filter((g) => g.role === "seeker");
+    let nearest: { groupId: string; name: string } | null = null;
+    let nearestDist = Infinity;
+    for (const sg of seekerGroups) {
+      const loc = latestLocations.get(sg.id);
+      if (!loc) continue;
+      const d = haversineDistance(pos, { lat: loc.lat, lng: loc.lng });
+      if (d < nearestDist) { nearestDist = d; nearest = { groupId: sg.id, name: sg.name }; }
+    }
+    if (!nearest) { Alert.alert("Kein Ziel", "Kein Detektiv-Standort bekannt."); return; }
+    await recordUsage(def, ga);
+    const durationS = def.duration_seconds ?? 180;
+    supabase.channel(`game:${session.id}:freeze`).send({
+      type: "broadcast",
+      event: "freeze_applied",
+      payload: { target_group_id: nearest.groupId, duration_s: durationS },
+    });
+    Alert.alert("❄️ Eingefroren!", `${nearest.name} wurde für ${Math.round(durationS / 60)} Min. eingefroren.`);
+  }
+
+  async function runAbility(def: AbilityDefinition, ga: GroupAbility) {
+    if (INSTANT_ABILITIES.has(def.type)) {
+      await activateInstant(def, ga);
+    } else if (MAP_PLACEMENT_ABILITIES.has(def.type)) {
+      router.push(`/(game)/drone-placement?ga_id=${ga.id}`);
+    } else if (PLACEMENT_ABILITIES.has(def.type)) {
+      await activatePlacement(def, ga);
+    } else if (def.type === "freeze") {
+      await activateFreeze(def, ga);
+    } else {
+      await recordUsage(def, ga);
+      Alert.alert("Aktiviert!", `${def.name} ist jetzt aktiv.`);
+    }
+  }
+
+  async function activateAbility(ga: GroupAbility) {
+    if (!myGroup || !session) return;
+    const def = ga.ability as AbilityDefinition | undefined;
+    if (!def) return;
+    if (isOobPunished || isFrozen || isTrapped) {
+      Alert.alert("Gesperrt", "Fähigkeiten sind gerade nicht verfügbar.");
+      return;
+    }
+    if (def.tier === "ultimate") {
+      if ((myGroup.action_points ?? 0) < (def.ap_cost ?? 0)) {
+        Alert.alert("Zu wenig AP", `Du brauchst ${def.ap_cost} AP, hast aber ${myGroup.action_points}.`);
+        return;
+      }
+      Alert.alert(
+        `${def.name} aktivieren?`,
+        def.description + `\n\nKosten: ${def.ap_cost} AP`,
+        [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "Aktivieren", onPress: async () => { setActivating(ga.id); await runAbility(def, ga); setActivating(null); } },
+        ]
+      );
+    } else {
+      if (!isCooldownReady(ga)) {
+        const remaining = cooldownRemainingSeconds(ga);
+        Alert.alert("Abklingzeit", `Noch ${Math.ceil(remaining / 60)}m ${Math.round(remaining % 60)}s warten.`);
+        return;
+      }
+      setActivating(ga.id);
+      await runAbility(def, ga);
+      setActivating(null);
+    }
+  }
 
   function openDrawer(mode: "abilities" | "tasks") {
     if (drawerMode === mode) {
@@ -801,25 +986,52 @@ export default function GameMapScreen() {
             <Text style={styles.drawerEmpty}>Keine Fähigkeiten ausgewählt</Text>
           ) : (
             myAbilities.map((ga) => {
-              const def = (ga as any).ability;
+              const def = ga.ability as AbilityDefinition | undefined;
               const isUltimate = def?.tier === "ultimate";
-              const cost = isUltimate
-                ? `${def?.ap_cost ?? "?"} AP`
-                : def?.cooldown_seconds
-                ? `${Math.round(def.cooldown_seconds / 60)} min`
-                : "";
+              const ready = isCooldownReady(ga);
+              const remaining = cooldownRemainingSeconds(ga);
+              const canAfford = !isUltimate || (myGroup?.action_points ?? 0) >= (def?.ap_cost ?? 0);
+              const isActivatingThis = activating === ga.id;
+              const locked = isOobPunished || isFrozen || isTrapped;
+              const isDisabled = activating !== null || locked || (!isUltimate && !ready) || (isUltimate && !canAfford);
+
+              let statusText: string;
+              if (isUltimate) {
+                statusText = `${def?.ap_cost ?? "?"} AP`;
+              } else if (!ready) {
+                statusText = `${Math.ceil(remaining / 60)}m ${Math.round(remaining % 60)}s`;
+              } else {
+                statusText = "✓ Bereit";
+              }
+
               return (
                 <TouchableOpacity
                   key={ga.id}
-                  style={styles.drawerCard}
-                  onPress={() => router.push("/(game)/abilities-active")}
+                  style={[
+                    styles.drawerCard,
+                    !isUltimate && !ready && styles.drawerCardCooldown,
+                    isUltimate && !canAfford && styles.drawerCardNoAP,
+                  ]}
+                  onPress={() => activateAbility(ga)}
+                  disabled={isDisabled}
                 >
-                  <Text style={styles.drawerCardName} numberOfLines={1}>
-                    {def?.name ?? "Fähigkeit"}
-                  </Text>
-                  <Text style={[styles.drawerCardCost, isUltimate && styles.drawerCardCostAP]}>
-                    {cost}
-                  </Text>
+                  {isActivatingThis ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Text style={styles.drawerCardName} numberOfLines={1}>
+                        {def?.name ?? "Fähigkeit"}
+                      </Text>
+                      <Text style={[
+                        styles.drawerCardCost,
+                        isUltimate && canAfford && styles.drawerCardCostAP,
+                        isUltimate && !canAfford && styles.drawerCardCostRed,
+                        !isUltimate && ready && styles.drawerCardReady,
+                      ]}>
+                        {statusText}
+                      </Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               );
             })
@@ -1127,6 +1339,10 @@ const styles = StyleSheet.create({
   drawerCardName: { color: "#fff", fontSize: 12, fontWeight: "700", textAlign: "center" },
   drawerCardCost: { color: "#8888aa", fontSize: 11, marginTop: 3 },
   drawerCardCostAP: { color: "#F39C12" },
+  drawerCardCostRed: { color: "#E74C3C" },
+  drawerCardReady: { color: "#2ECC71", fontWeight: "700" },
+  drawerCardCooldown: { opacity: 0.5 },
+  drawerCardNoAP: { opacity: 0.4 },
   drawerEmpty: { color: "#8888aa", fontSize: 13, flex: 1, textAlign: "center" },
   tasksScrollContent: {
     alignItems: "center",
