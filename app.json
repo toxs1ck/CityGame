@@ -18,7 +18,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a1a2e"
+        "backgroundColor": "#bec0ca"
       },
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
