@@ -207,6 +207,21 @@ export default function MonitorScreen() {
       .eq("id", sessionId);
   }
 
+  async function kickGroup(group: Group) {
+    Alert.alert(
+      "Spieler entfernen?",
+      `„${group.name}" wird aus dem Spiel entfernt.`,
+      [
+        { text: "Abbrechen", style: "cancel" },
+        {
+          text: "Entfernen",
+          style: "destructive",
+          onPress: () => supabase.from("groups").delete().eq("id", group.id),
+        },
+      ]
+    );
+  }
+
   async function endGame() {
     Alert.alert("Spiel beenden?", "Das Spiel wird für alle beendet.", [
       { text: "Abbrechen", style: "cancel" },
@@ -303,6 +318,10 @@ export default function MonitorScreen() {
                   </TouchableOpacity>
                 )}
               </View>
+
+              <TouchableOpacity style={styles.kickBtn} onPress={() => kickGroup(g)}>
+                <Text style={styles.kickBtnText}>✕</Text>
+              </TouchableOpacity>
 
               {localSession?.status === "lobby" && g.role !== "fugitive" && (
                 <TouchableOpacity
@@ -446,6 +465,16 @@ const styles = StyleSheet.create({
   spLabel: { color: "#fff", fontSize: 12, fontWeight: "600" },
   spLabelUnassigned: { color: "#E74C3C" },
   spEdit: { color: "#8888aa", fontSize: 11, marginLeft: 2 },
+  kickBtn: {
+    backgroundColor: "rgba(231,76,60,0.15)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: "rgba(231,76,60,0.4)",
+  },
+  kickBtnText: { color: "#E74C3C", fontSize: 14, fontWeight: "700" },
   assignBtn: {
     backgroundColor: "#E74C3C",
     borderRadius: 8,
