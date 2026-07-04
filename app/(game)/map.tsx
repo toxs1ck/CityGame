@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, Circle, Polygon, Polyline } from "react-native-maps";
@@ -42,15 +43,18 @@ export default function GameMapScreen() {
     pois,
     abilityObjects,
     allActiveAbilities,
+    reset: resetGame,
   } = useGameStore();
   const {
     myGroup,
     deviceId,
     myTasks,
+    myAbilities,
     setOobPunished,
     isFrozen,
     setFrozen,
     isTrapped,
+    reset: resetPlayer,
   } = usePlayerStore();
 
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -74,6 +78,12 @@ export default function GameMapScreen() {
   const leftFreezeZoneAtRef = useRef<number | null>(null);
   const myPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<MapView>(null);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [abilitiesOpen, setAbilitiesOpen] = useState(false);
+  const BAR_HEIGHT = 68;
+  const DRAWER_HEIGHT = 88;
+  const drawerAnim = useRef(new Animated.Value(DRAWER_HEIGHT)).current;
 
   const FREEZE_HOLD_RADIUS_M = 25;
 
@@ -394,6 +404,46 @@ export default function GameMapScreen() {
     return () => clearInterval(t);
   }, [lastFugitiveReveal?.recorded_at, isFugitive]);
 
+  function toggleAbilities() {
+    const opening = !abilitiesOpen;
+    setAbilitiesOpen(opening);
+    Animated.timing(drawerAnim, {
+      toValue: opening ? 0 : DRAWER_HEIGHT,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  function exitGame() {
+    setMenuOpen(false);
+    Alert.alert(
+      "Spiel verlassen?",
+      "Du verlässt das Spiel dauerhaft. Wenn alle gehen, wird das Spiel abgebrochen.",
+      [
+        { text: "Abbrechen", style: "cancel" },
+        {
+          text: "Verlassen",
+          style: "destructive",
+          onPress: async () => {
+            if (!myGroup || !session) { router.replace("/"); return; }
+            await supabase.from("groups").delete().eq("id", myGroup.id);
+            const { data: remaining } = await supabase
+              .from("groups").select("id").eq("session_id", session.id);
+            if (!remaining || remaining.length === 0) {
+              await supabase.from("game_sessions").update({
+                status: "aborted",
+                finished_at: new Date().toISOString(),
+              }).eq("id", session.id);
+            }
+            resetGame();
+            resetPlayer();
+            router.replace("/");
+          },
+        },
+      ]
+    );
+  }
+
   const nearbyTasks = useNearbyTasks(myPos?.lat ?? null, myPos?.lng ?? null);
 
   const catchRadiusM = session?.settings.catch_radius_m ?? CATCH_RADIUS_M;
@@ -649,6 +699,14 @@ export default function GameMapScreen() {
           <View style={styles.apBox}>
             <Text style={styles.apText}>⚡ {myGroup?.action_points ?? 0} AP</Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.menuBtn}
+            onPress={() => setMenuOpen((o) => !o)}
+            pointerEvents="auto"
+          >
+            <Text style={styles.menuBtnText}>☰</Text>
+          </TouchableOpacity>
         </View>
 
         {/* OOB warning */}
@@ -687,7 +745,44 @@ export default function GameMapScreen() {
         )}
       </View>
 
-      {/* Bottom panel */}
+      {/* Abilities drawer — slides up from behind the bottom bar */}
+      <Animated.View
+        style={[
+          styles.abilitiesDrawer,
+          { bottom: BAR_HEIGHT + insets.bottom, transform: [{ translateY: drawerAnim }] },
+        ]}
+        pointerEvents={abilitiesOpen ? "auto" : "none"}
+      >
+        {myAbilities.length === 0 ? (
+          <Text style={styles.drawerEmpty}>Keine Fähigkeiten ausgewählt</Text>
+        ) : (
+          myAbilities.map((ga) => {
+            const def = (ga as any).ability;
+            const isUltimate = def?.tier === "ultimate";
+            const cost = isUltimate
+              ? `${def?.ap_cost ?? "?"} AP`
+              : def?.cooldown_seconds
+              ? `${Math.round(def.cooldown_seconds / 60)} min`
+              : "";
+            return (
+              <TouchableOpacity
+                key={ga.id}
+                style={styles.drawerCard}
+                onPress={() => router.push("/(game)/abilities-active")}
+              >
+                <Text style={styles.drawerCardName} numberOfLines={1}>
+                  {def?.name ?? "Fähigkeit"}
+                </Text>
+                <Text style={[styles.drawerCardCost, isUltimate && styles.drawerCardCostAP]}>
+                  {cost}
+                </Text>
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </Animated.View>
+
+      {/* Bottom panel: alerts + 3-segment bar */}
       <View style={[styles.bottomPanel, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
         {/* Caught in a trap */}
         {isTrapped && (
@@ -723,11 +818,7 @@ export default function GameMapScreen() {
               <View
                 style={[
                   styles.catchBarFill,
-                  {
-                    width: `${
-                      ((catchWindow - catchSecondsLeft) / catchWindow) * 100
-                    }%`,
-                  },
+                  { width: `${((catchWindow - catchSecondsLeft) / catchWindow) * 100}%` },
                 ]}
               />
             </View>
@@ -746,33 +837,34 @@ export default function GameMapScreen() {
         {nearbyTasks.length > 0 && (
           <TouchableOpacity
             style={styles.taskAlert}
-            onPress={() =>
-              router.push(`/(game)/task/${nearbyTasks[0].id}`)
-            }
+            pointerEvents="auto"
+            onPress={() => router.push(`/(game)/task/${nearbyTasks[0].id}`)}
           >
             <Text style={styles.taskAlertIcon}>📍</Text>
             <View style={styles.taskAlertText}>
               <Text style={styles.taskAlertTitle}>Aufgabe in der Nähe!</Text>
-              <Text style={styles.taskAlertSub}>
-                {nearbyTasks[0].task?.title}
-              </Text>
+              <Text style={styles.taskAlertSub}>{nearbyTasks[0].task?.title}</Text>
             </View>
             <Text style={styles.taskAlertArrow}>→</Text>
           </TouchableOpacity>
         )}
 
-        <View style={styles.bottomButtons}>
+        {/* 3-segment bottom bar */}
+        <View style={styles.bottomBar} pointerEvents="auto">
           <TouchableOpacity
-            style={styles.bottomBtn}
-            onPress={() => router.push("/(game)/abilities-active")}
+            style={[styles.barSegment, abilitiesOpen && styles.barSegmentActive]}
+            onPress={toggleAbilities}
           >
-            <Text style={styles.bottomBtnIcon}>⚡</Text>
-            <Text style={styles.bottomBtnLabel}>Fähigkeiten</Text>
+            <Text style={styles.barIcon}>⚡</Text>
+            <Text style={styles.barLabel}>Fähigkeiten</Text>
           </TouchableOpacity>
 
+          <View style={styles.barDivider} />
+
           <TouchableOpacity
-            style={[styles.bottomBtn, styles.centerBtn]}
+            style={styles.barSegment}
             onPress={() => {
+              if (abilitiesOpen) toggleAbilities();
               if (myPos) {
                 mapRef.current?.animateToRegion({
                   latitude: myPos.lat,
@@ -783,13 +875,16 @@ export default function GameMapScreen() {
               }
             }}
           >
-            <Text style={styles.bottomBtnIcon}>📍</Text>
-            <Text style={styles.bottomBtnLabel}>Zentrieren</Text>
+            <Text style={styles.barIcon}>📍</Text>
+            <Text style={styles.barLabel}>Zentrieren</Text>
           </TouchableOpacity>
 
+          <View style={styles.barDivider} />
+
           <TouchableOpacity
-            style={styles.bottomBtn}
+            style={styles.barSegment}
             onPress={() => {
+              if (abilitiesOpen) toggleAbilities();
               Alert.alert(
                 "Aufgaben",
                 myTasks
@@ -799,11 +894,32 @@ export default function GameMapScreen() {
               );
             }}
           >
-            <Text style={styles.bottomBtnIcon}>📋</Text>
-            <Text style={styles.bottomBtnLabel}>Aufgaben</Text>
+            <Text style={styles.barIcon}>📋</Text>
+            <Text style={styles.barLabel}>Aufgaben</Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Menu overlay */}
+      {menuOpen && (
+        <TouchableOpacity
+          style={styles.menuBackdrop}
+          onPress={() => setMenuOpen(false)}
+          activeOpacity={1}
+        >
+          <View
+            style={[styles.menuPanel, { top: insets.top + 60 }]}
+            pointerEvents="auto"
+          >
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={exitGame}
+            >
+              <Text style={styles.menuItemText}>🚪  Spiel verlassen</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -811,6 +927,8 @@ export default function GameMapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
+
+  // ── Top HUD ──────────────────────────────────────────────────────────────────
   topHUD: {
     position: "absolute",
     top: 0,
@@ -846,6 +964,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   apText: { color: "#F39C12", fontWeight: "700", fontSize: 14 },
+  menuBtn: {
+    backgroundColor: "rgba(26,26,46,0.9)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  menuBtnText: { color: "#fff", fontSize: 18, lineHeight: 22 },
   oobWarning: {
     marginTop: 8,
     backgroundColor: "rgba(204,0,0,0.9)",
@@ -879,15 +1004,48 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   revealText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+
+  // ── Abilities drawer ─────────────────────────────────────────────────────────
+  abilitiesDrawer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 88,
+    backgroundColor: "rgba(15,15,35,0.97)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    gap: 8,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    zIndex: 5,
+  },
+  drawerCard: {
+    flex: 1,
+    backgroundColor: "rgba(52,152,219,0.15)",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(52,152,219,0.3)",
+  },
+  drawerCardName: { color: "#fff", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  drawerCardCost: { color: "#8888aa", fontSize: 11, marginTop: 3 },
+  drawerCardCostAP: { color: "#F39C12" },
+  drawerEmpty: { color: "#8888aa", fontSize: 13, flex: 1, textAlign: "center" },
+
+  // ── Bottom panel ─────────────────────────────────────────────────────────────
   bottomPanel: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 10,
   },
   trapOverlay: {
-    margin: 12,
-    marginBottom: 0,
+    marginHorizontal: 12,
+    marginBottom: 8,
     backgroundColor: "#6B3A2A",
     borderRadius: 16,
     padding: 14,
@@ -896,8 +1054,8 @@ const styles = StyleSheet.create({
   trapOverlayTitle: { color: "#fff", fontWeight: "900", fontSize: 18 },
   trapOverlaySub: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginTop: 2 },
   frozenOverlay: {
-    margin: 12,
-    marginBottom: 0,
+    marginHorizontal: 12,
+    marginBottom: 8,
     backgroundColor: "#0055AA",
     borderRadius: 16,
     padding: 14,
@@ -906,8 +1064,8 @@ const styles = StyleSheet.create({
   frozenOverlayTitle: { color: "#fff", fontWeight: "900", fontSize: 18 },
   frozenOverlaySub: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginTop: 2 },
   catchWindow: {
-    margin: 12,
-    marginBottom: 0,
+    marginHorizontal: 12,
+    marginBottom: 8,
     backgroundColor: "#C0392B",
     borderRadius: 16,
     padding: 16,
@@ -923,20 +1081,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
     overflow: "hidden",
   },
-  catchBarFill: {
-    height: "100%",
-    backgroundColor: "#fff",
-    borderRadius: 4,
-  },
-  catchWindowCountdown: {
-    color: "#fff",
-    fontWeight: "900",
-    fontSize: 32,
-    marginTop: 6,
-  },
+  catchBarFill: { height: "100%", backgroundColor: "#fff", borderRadius: 4 },
+  catchWindowCountdown: { color: "#fff", fontWeight: "900", fontSize: 32, marginTop: 6 },
   catchBanner: {
-    margin: 12,
-    marginBottom: 0,
+    marginHorizontal: 12,
+    marginBottom: 8,
     backgroundColor: "rgba(231,76,60,0.85)",
     borderRadius: 16,
     padding: 12,
@@ -944,7 +1093,8 @@ const styles = StyleSheet.create({
   },
   catchText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   taskAlert: {
-    margin: 12,
+    marginHorizontal: 12,
+    marginBottom: 8,
     backgroundColor: "#F39C12",
     borderRadius: 16,
     padding: 16,
@@ -957,27 +1107,52 @@ const styles = StyleSheet.create({
   taskAlertTitle: { color: "#000", fontWeight: "800", fontSize: 15 },
   taskAlertSub: { color: "rgba(0,0,0,0.7)", fontSize: 13 },
   taskAlertArrow: { color: "#000", fontSize: 20, fontWeight: "700" },
-  bottomButtons: {
+
+  // ── 3-segment bottom bar ─────────────────────────────────────────────────────
+  bottomBar: {
     flexDirection: "row",
-    paddingHorizontal: 12,
-    paddingBottom: 24,
-    gap: 8,
+    backgroundColor: "rgba(15,15,35,0.97)",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.07)",
   },
-  bottomBtn: {
+  barSegment: {
     flex: 1,
-    backgroundColor: "rgba(26,26,46,0.95)",
-    borderRadius: 16,
-    padding: 14,
     alignItems: "center",
+    paddingVertical: 12,
   },
-  centerBtn: {
-    backgroundColor: "rgba(52,152,219,0.9)",
+  barSegmentActive: {
+    backgroundColor: "rgba(52,152,219,0.15)",
   },
-  bottomBtnIcon: { fontSize: 22 },
-  bottomBtnLabel: {
-    color: "#fff",
-    fontSize: 11,
-    marginTop: 4,
-    fontWeight: "600",
+  barDivider: {
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    marginVertical: 10,
   },
+  barIcon: { fontSize: 22 },
+  barLabel: { color: "#8888aa", fontSize: 11, marginTop: 3, fontWeight: "600" },
+
+  // ── Dropdown menu ─────────────────────────────────────────────────────────────
+  menuBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 50,
+  },
+  menuPanel: {
+    position: "absolute",
+    right: 12,
+    backgroundColor: "rgba(20,20,45,0.98)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    overflow: "hidden",
+    minWidth: 200,
+  },
+  menuItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  menuItemText: { color: "#E74C3C", fontSize: 16, fontWeight: "700" },
 });
