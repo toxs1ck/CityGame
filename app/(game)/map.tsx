@@ -113,6 +113,7 @@ export default function GameMapScreen() {
   const leftFreezeZoneAtRef = useRef<number | null>(null);
   const myPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<MapView>(null);
+  const didFetchInitialPing = useRef(false);
 
   const [activating, setActivating] = useState<string | null>(null);
   const [, forceUpdate] = useState(0);
@@ -428,22 +429,43 @@ export default function GameMapScreen() {
     return () => clearInterval(t);
   }, [session?.started_at, isFugitive]);
 
-  // Reveal countdown for seekers
+  // Reveal countdown — anchored to session.started_at so it's the same on all devices
   useEffect(() => {
-    if (isFugitive) return;
-    const interval =
-      session?.settings.reveal_interval_s ?? DEFAULT_REVEAL_INTERVAL_S;
-    const lastReveal = lastFugitiveReveal
-      ? new Date(lastFugitiveReveal.recorded_at).getTime()
-      : Date.now();
+    if (isFugitive || !session?.started_at) return;
+    const intervalS = session.settings.reveal_interval_s ?? DEFAULT_REVEAL_INTERVAL_S;
+    const headstartS = session.settings.headstart_s ?? DEFAULT_HEADSTART_S;
+    const startedAt = new Date(session.started_at).getTime();
+
     const update = () => {
-      const elapsed = (Date.now() - lastReveal) / 1000;
-      setRevealCountdown(Math.max(0, interval - Math.floor(elapsed)));
+      const elapsedS = (Date.now() - startedAt) / 1000;
+      const activeElapsedS = Math.max(0, elapsedS - headstartS);
+      const timeInIntervalS = activeElapsedS % intervalS;
+      setRevealCountdown(Math.max(0, Math.round(intervalS - timeInIntervalS)));
     };
     update();
     const t = setInterval(update, 1000);
     return () => clearInterval(t);
-  }, [lastFugitiveReveal?.recorded_at, isFugitive]);
+  }, [isFugitive, session?.started_at, session?.settings.reveal_interval_s, session?.settings.headstart_s]);
+
+  // On mount, fetch the last known fugitive position from DB so seekers see it immediately
+  useEffect(() => {
+    if (isFugitive || !session || groups.length === 0 || didFetchInitialPing.current) return;
+    const fugitiveGroup = groups.find((g) => g.role === "fugitive");
+    if (!fugitiveGroup) return; // not assigned yet — effect re-runs when groups updates
+    didFetchInitialPing.current = true;
+
+    supabase
+      .from("group_locations")
+      .select("*")
+      .eq("group_id", fugitiveGroup.id)
+      .eq("session_id", session.id)
+      .order("recorded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) useGameStore.getState().setLastFugitiveReveal(data as GroupLocation);
+      });
+  }, [isFugitive, session?.id, groups]);
 
   // Re-render every second while abilities drawer is open so cooldown timers update
   useEffect(() => {
