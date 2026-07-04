@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
   Alert,
   Animated,
@@ -100,10 +101,13 @@ export default function GameMapScreen() {
   const mapRef = useRef<MapView>(null);
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [abilitiesOpen, setAbilitiesOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<"abilities" | "tasks" | null>(null);
   const BAR_HEIGHT = 68;
-  const DRAWER_HEIGHT = 88;
+  const DRAWER_HEIGHT = 100;
   const drawerAnim = useRef(new Animated.Value(DRAWER_HEIGHT)).current;
+
+  const abilitiesOpen = drawerMode === "abilities";
+  const tasksOpen = drawerMode === "tasks";
 
   const FREEZE_HOLD_RADIUS_M = 25;
 
@@ -424,14 +428,31 @@ export default function GameMapScreen() {
     return () => clearInterval(t);
   }, [lastFugitiveReveal?.recorded_at, isFugitive]);
 
-  function toggleAbilities() {
-    const opening = !abilitiesOpen;
-    setAbilitiesOpen(opening);
+  function openDrawer(mode: "abilities" | "tasks") {
+    if (drawerMode === mode) {
+      Animated.timing(drawerAnim, {
+        toValue: DRAWER_HEIGHT,
+        duration: 220,
+        useNativeDriver: true,
+      }).start(() => setDrawerMode(null));
+    } else if (drawerMode !== null) {
+      setDrawerMode(mode);
+    } else {
+      setDrawerMode(mode);
+      Animated.timing(drawerAnim, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
+  }
+
+  function closeDrawer() {
     Animated.timing(drawerAnim, {
-      toValue: opening ? 0 : DRAWER_HEIGHT,
+      toValue: DRAWER_HEIGHT,
       duration: 220,
       useNativeDriver: true,
-    }).start();
+    }).start(() => setDrawerMode(null));
   }
 
   function exitGame() {
@@ -664,20 +685,20 @@ export default function GameMapScreen() {
           />
         )}
 
-        {/* POI markers */}
-        {pois.map((poi) => {
-          const hasActiveTask = myTasks.some(
-            (t) => t.task?.poi_id === poi.id && t.status === "active"
-          );
-          return (
-            <Marker
-              key={poi.id}
-              coordinate={{ latitude: poi.lat, longitude: poi.lng }}
-              title={poi.name}
-              pinColor={hasActiveTask ? "#F39C12" : "#8888aa"}
-            />
-          );
-        })}
+        {/* POI markers — only visible when tasks drawer is open */}
+        {tasksOpen &&
+          pois
+            .filter((poi) =>
+              myTasks.some((t) => t.task?.poi_id === poi.id && t.status === "active")
+            )
+            .map((poi) => (
+              <Marker
+                key={poi.id}
+                coordinate={{ latitude: poi.lat, longitude: poi.lng }}
+                title={poi.name}
+                pinColor="#F39C12"
+              />
+            ))}
 
         {/* Other group markers */}
         {visibleGroups.map((g) => {
@@ -766,40 +787,101 @@ export default function GameMapScreen() {
         )}
       </View>
 
-      {/* Abilities drawer — slides up from behind the bottom bar */}
+      {/* Slide-up drawer — abilities or tasks, mutually exclusive */}
       <Animated.View
         style={[
-          styles.abilitiesDrawer,
+          styles.slideDrawer,
           { bottom: BAR_HEIGHT + insets.bottom, transform: [{ translateY: drawerAnim }] },
         ]}
-        pointerEvents={abilitiesOpen ? "auto" : "none"}
+        pointerEvents={drawerMode !== null ? "auto" : "none"}
       >
-        {myAbilities.length === 0 ? (
-          <Text style={styles.drawerEmpty}>Keine Fähigkeiten ausgewählt</Text>
-        ) : (
-          myAbilities.map((ga) => {
-            const def = (ga as any).ability;
-            const isUltimate = def?.tier === "ultimate";
-            const cost = isUltimate
-              ? `${def?.ap_cost ?? "?"} AP`
-              : def?.cooldown_seconds
-              ? `${Math.round(def.cooldown_seconds / 60)} min`
-              : "";
+        {/* ── Abilities content ── */}
+        {abilitiesOpen && (
+          myAbilities.length === 0 ? (
+            <Text style={styles.drawerEmpty}>Keine Fähigkeiten ausgewählt</Text>
+          ) : (
+            myAbilities.map((ga) => {
+              const def = (ga as any).ability;
+              const isUltimate = def?.tier === "ultimate";
+              const cost = isUltimate
+                ? `${def?.ap_cost ?? "?"} AP`
+                : def?.cooldown_seconds
+                ? `${Math.round(def.cooldown_seconds / 60)} min`
+                : "";
+              return (
+                <TouchableOpacity
+                  key={ga.id}
+                  style={styles.drawerCard}
+                  onPress={() => router.push("/(game)/abilities-active")}
+                >
+                  <Text style={styles.drawerCardName} numberOfLines={1}>
+                    {def?.name ?? "Fähigkeit"}
+                  </Text>
+                  <Text style={[styles.drawerCardCost, isUltimate && styles.drawerCardCostAP]}>
+                    {cost}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
+          )
+        )}
+
+        {/* ── Tasks content ── */}
+        {tasksOpen && (
+          (() => {
+            const activeTasks = myTasks.filter((t) => t.status === "active");
+            if (activeTasks.length === 0) {
+              return <Text style={styles.drawerEmpty}>Keine aktiven Aufgaben</Text>;
+            }
             return (
-              <TouchableOpacity
-                key={ga.id}
-                style={styles.drawerCard}
-                onPress={() => router.push("/(game)/abilities-active")}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.tasksScrollContent}
               >
-                <Text style={styles.drawerCardName} numberOfLines={1}>
-                  {def?.name ?? "Fähigkeit"}
-                </Text>
-                <Text style={[styles.drawerCardCost, isUltimate && styles.drawerCardCostAP]}>
-                  {cost}
-                </Text>
-              </TouchableOpacity>
+                {activeTasks.map((t) => {
+                  const poi = pois.find((p) => p.id === t.task?.poi_id);
+                  const dist =
+                    myPos && poi
+                      ? haversineDistance(myPos, { lat: poi.lat, lng: poi.lng })
+                      : null;
+                  const distLabel =
+                    dist !== null
+                      ? dist >= 1000
+                        ? `${(dist / 1000).toFixed(1)} km`
+                        : `${Math.round(dist)} m`
+                      : null;
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      style={styles.taskDrawerCard}
+                      onPress={() => {
+                        if (poi) {
+                          mapRef.current?.animateToRegion({
+                            latitude: poi.lat,
+                            longitude: poi.lng,
+                            latitudeDelta: 0.006,
+                            longitudeDelta: 0.006,
+                          });
+                        }
+                        closeDrawer();
+                      }}
+                    >
+                      <Text style={styles.taskDrawerPoi} numberOfLines={1}>
+                        📍 {poi?.name ?? "Unbekannter Ort"}
+                      </Text>
+                      <Text style={styles.taskDrawerTitle} numberOfLines={2}>
+                        {t.task?.title ?? "Aufgabe"}
+                      </Text>
+                      {distLabel && (
+                        <Text style={styles.taskDrawerDist}>{distLabel}</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             );
-          })
+          })()
         )}
       </Animated.View>
 
@@ -874,7 +956,7 @@ export default function GameMapScreen() {
         <View style={styles.bottomBar} pointerEvents="auto">
           <TouchableOpacity
             style={[styles.barSegment, abilitiesOpen && styles.barSegmentActive]}
-            onPress={toggleAbilities}
+            onPress={() => openDrawer("abilities")}
           >
             <Text style={styles.barIcon}>⚡</Text>
             <Text style={styles.barLabel}>Fähigkeiten</Text>
@@ -885,7 +967,7 @@ export default function GameMapScreen() {
           <TouchableOpacity
             style={styles.barSegment}
             onPress={() => {
-              if (abilitiesOpen) toggleAbilities();
+              if (drawerMode !== null) closeDrawer();
               if (myPos) {
                 mapRef.current?.animateToRegion({
                   latitude: myPos.lat,
@@ -903,17 +985,8 @@ export default function GameMapScreen() {
           <View style={styles.barDivider} />
 
           <TouchableOpacity
-            style={styles.barSegment}
-            onPress={() => {
-              if (abilitiesOpen) toggleAbilities();
-              Alert.alert(
-                "Aufgaben",
-                myTasks
-                  .filter((t) => t.status === "active")
-                  .map((t, i) => `${i + 1}. ${t.task?.title ?? "…"}`)
-                  .join("\n") || "Keine aktiven Aufgaben."
-              );
-            }}
+            style={[styles.barSegment, tasksOpen && styles.barSegmentActive]}
+            onPress={() => openDrawer("tasks")}
           >
             <Text style={styles.barIcon}>📋</Text>
             <Text style={styles.barLabel}>Aufgaben</Text>
@@ -1026,12 +1099,12 @@ const styles = StyleSheet.create({
   },
   revealText: { color: "#fff", fontSize: 13, fontWeight: "600" },
 
-  // ── Abilities drawer ─────────────────────────────────────────────────────────
-  abilitiesDrawer: {
+  // ── Slide-up drawer (abilities + tasks) ─────────────────────────────────────
+  slideDrawer: {
     position: "absolute",
     left: 0,
     right: 0,
-    height: 88,
+    height: 100,
     backgroundColor: "rgba(15,15,35,0.97)",
     flexDirection: "row",
     alignItems: "center",
@@ -1055,6 +1128,24 @@ const styles = StyleSheet.create({
   drawerCardCost: { color: "#8888aa", fontSize: 11, marginTop: 3 },
   drawerCardCostAP: { color: "#F39C12" },
   drawerEmpty: { color: "#8888aa", fontSize: 13, flex: 1, textAlign: "center" },
+  tasksScrollContent: {
+    alignItems: "center",
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  taskDrawerCard: {
+    width: 140,
+    backgroundColor: "rgba(243,156,18,0.12)",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "rgba(243,156,18,0.35)",
+    justifyContent: "center",
+  },
+  taskDrawerPoi: { color: "#F39C12", fontSize: 12, fontWeight: "800", marginBottom: 3 },
+  taskDrawerTitle: { color: "#ddd", fontSize: 11, lineHeight: 15 },
+  taskDrawerDist: { color: "#8888aa", fontSize: 10, marginTop: 4, fontWeight: "600" },
 
   // ── Bottom panel ─────────────────────────────────────────────────────────────
   bottomPanel: {
