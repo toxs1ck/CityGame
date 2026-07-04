@@ -9,6 +9,7 @@
     "scheme": "citygame",
     "ios": {
       "supportsTablet": true,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "CityGame needs your location to show your position on the map during the game.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "CityGame needs your location to track your group during the game.",
@@ -35,6 +36,7 @@
     "plugins": [
       "expo-router",
       "expo-location",
+      "expo-apple-authentication",
       [
         "expo-camera",
         {

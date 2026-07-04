@@ -15,7 +15,7 @@ export default function HostLayout() {
   }
 
   if (!user) {
-    return <Redirect href="/auth/login?from=host" />;
+    return <Redirect href="/" />;
   }
 
   return (

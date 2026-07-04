@@ -14,7 +14,7 @@ export default function GMLayout() {
   }
 
   if (!user) {
-    return <Redirect href="/auth/login?from=gm" />;
+    return <Redirect href="/" />;
   }
 
   // User exists but profile not yet fetched — wait briefly
