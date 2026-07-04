@@ -12,9 +12,6 @@ import {
   ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as WebBrowser from "expo-web-browser";
-import * as AppleAuthentication from "expo-apple-authentication";
-import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { usePlayerStore } from "../store/playerStore";
@@ -22,19 +19,6 @@ import { useGameStore } from "../store/gameStore";
 import type { GameSession, Group, POI } from "../types/game";
 
 type AuthMode = "login" | "signup" | "forgot";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function parseOAuthRedirect(url: string): { access_token?: string; refresh_token?: string; code?: string } {
-  const hash = url.includes("#") ? url.split("#")[1] : "";
-  const query = url.includes("?") ? url.split("?")[1].split("#")[0] : "";
-  const params = new URLSearchParams(hash || query);
-  return {
-    access_token: params.get("access_token") ?? undefined,
-    refresh_token: params.get("refresh_token") ?? undefined,
-    code: params.get("code") ?? undefined,
-  };
-}
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -163,55 +147,11 @@ export default function LandingScreen() {
   async function sendPasswordReset() {
     if (!email.trim()) { Alert.alert("Fehler", "Bitte E-Mail-Adresse eingeben."); return; }
     setAuthLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: Linking.createURL("/"),
-    });
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
     setAuthLoading(false);
     if (error) { Alert.alert("Fehler", error.message); return; }
     Alert.alert("E-Mail versendet", "Prüfe dein Postfach für den Zurücksetzen-Link.");
     setMode("login");
-  }
-
-  // ── Social auth ─────────────────────────────────────────────────────────────
-  async function signInWithGoogle() {
-    const redirectUri = Linking.createURL("/");
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: redirectUri, skipBrowserRedirect: true },
-    });
-    if (error || !data.url) { Alert.alert("Fehler", error?.message ?? "Google-Anmeldung fehlgeschlagen."); return; }
-
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
-    if (result.type !== "success" || !result.url) return;
-
-    // Try PKCE code exchange first, fall back to token hash
-    const parsed = parseOAuthRedirect(result.url);
-    if (parsed.code) {
-      await supabase.auth.exchangeCodeForSession(result.url);
-    } else if (parsed.access_token && parsed.refresh_token) {
-      await supabase.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token });
-    }
-  }
-
-  async function signInWithApple() {
-    try {
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-      if (!credential.identityToken) { Alert.alert("Fehler", "Apple-Anmeldung fehlgeschlagen."); return; }
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: "apple",
-        token: credential.identityToken,
-      });
-      if (error) Alert.alert("Fehler", error.message);
-    } catch (e: any) {
-      if (e.code !== "ERR_REQUEST_CANCELED") {
-        Alert.alert("Fehler", e.message ?? "Apple-Anmeldung fehlgeschlagen.");
-      }
-    }
   }
 
   async function logout() {
@@ -442,32 +382,6 @@ export default function LandingScreen() {
             </>
           )}
 
-          {/* Social login — not in forgot mode */}
-          {mode !== "forgot" && (
-            <>
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>oder</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <TouchableOpacity style={[styles.btn, styles.btnSocial]} onPress={signInWithGoogle}>
-                <Text style={styles.googleIcon}>G</Text>
-                <Text style={styles.btnSocialText}>Mit Google anmelden</Text>
-              </TouchableOpacity>
-
-              {Platform.OS === "ios" && (
-                <AppleAuthentication.AppleAuthenticationButton
-                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-                  cornerRadius={14}
-                  style={styles.appleBtn}
-                  onPress={signInWithApple}
-                />
-              )}
-            </>
-          )}
-
           <View style={styles.guestSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -548,28 +462,6 @@ const styles = StyleSheet.create({
   // Links
   linkRow: { alignItems: "flex-end", marginBottom: 16, marginTop: -4 },
   link: { color: "#3498DB", fontSize: 14, fontWeight: "600" },
-
-  // Divider
-  divider: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "#2a2a4e" },
-  dividerText: { color: "#8888aa", fontSize: 13 },
-
-  // Social buttons
-  btnSocial: {
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
-  btnSocialText: { color: "#111", fontSize: 16, fontWeight: "600" },
-  googleIcon: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#4285F4",
-    fontFamily: Platform.OS === "ios" ? "Georgia" : "serif",
-  },
-  appleBtn: { width: "100%", height: 54, marginBottom: 12 },
 
   // Guest bar (pinned to bottom)
   guestSpacer: { height: 16 },
